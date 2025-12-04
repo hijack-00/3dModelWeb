@@ -15,31 +15,13 @@ export default function Home() {
     const [models, setModels] = useState<ModelCard[]>([]);
 
     useEffect(() => {
-        // Define your models here (you can also fetch this from an API if you want dynamic discovery)
+        // For testing: showing only Female Hoodie model with proper material maps
         const availableModels: ModelCard[] = [
-            {
-                name: 'Oversized T-Shirt',
-                fileName: 'Tshirt_Oversized.glb',
-                path: '/models/Tshirt_Oversized.glb',
-                icon: '👕'
-            },
-            {
-                name: 'Female Cloth',
-                fileName: 'female_cloth1.glb',
-                path: '/models/female_cloth1.glb',
-                icon: '👗'
-            },
             {
                 name: 'Female Hoodie',
                 fileName: 'female_cloth1.glb',
                 path: '/models/FemaleHoodie/female_cloth1.glb',
                 icon: '🧥'
-            },
-            {
-                name: 'Oversized Tshirt',
-                fileName: 'oversized_t-shirt.glb',
-                path: '/models/oversized_t-shirt.glb',
-                icon: '👕'
             }
         ];
         setModels(availableModels);
