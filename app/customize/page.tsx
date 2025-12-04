@@ -26,7 +26,7 @@ function CustomizeContent() {
     const modelParam = searchParams.get('model');
 
     const [modelPath, setModelPath] = useState(modelParam || '/models/FemaleHoodie/female_cloth1.glb');
-    const [modelColor, setModelColor] = useState('#FFFFFF');
+    const [modelColor, setModelColor] = useState('original');
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
     const [stickerImage, setStickerImage] = useState<string | null>(null);
@@ -328,8 +328,6 @@ function CustomizeContent() {
                         <button
                             onClick={() => {
                                 setModelColor('reset');
-                                setStickerImage(null);
-                                setUploadedImages([]);
                             }}
                             className="px-2 py-2 bg-white/8 hover:bg-white/15 text-white border border-white/15 rounded-[5px] text-[10px] font-semibold transition-all flex items-center justify-center gap-1.5 w-[120px]"
                             title="Restore original texture"

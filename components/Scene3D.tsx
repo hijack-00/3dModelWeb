@@ -117,16 +117,10 @@ function Model3D({
                         emissiveMap: mat.emissiveMap || null,
                         color: mat.color.clone(),
                     });
-
-                    console.log(`Loaded mesh: ${child.name}`, {
-                        hasBaseColor: !!mat.map,
-                        hasNormal: !!mat.normalMap,
-                        hasRoughness: !!mat.roughnessMap,
-                    });
                 });
 
                 setModel(object);
-                setColorMode('original'); // Start in original texture mode
+                setColorMode('original');
                 onModelLoad();
             },
             undefined,
@@ -138,57 +132,52 @@ function Model3D({
 
     /* ------------------------------------------------
         HANDLE COLOR CHANGES
-        When user picks a color → switch to color mode
-        When user picks "reset" → switch to original mode
-    -------------------------------------------------- */
-    useEffect(() => {
-        if (!model || stickerImage) return; // Don't touch materials when sticker is active
-
-        if (modelColor === "reset") {
-            // RESTORE ORIGINAL TEXTURE MODE
-            console.log("Restoring original textures");
-            model.traverse((child: any) => {
-                if (!child.isMesh || !child.material) return;
-                const stored = originalMaps.current.get(child);
-                if (!stored) return;
-
-                child.material.map = stored.map;
-                child.material.normalMap = stored.normalMap;
-                child.material.roughnessMap = stored.roughnessMap;
-                child.material.metalnessMap = stored.metalnessMap;
-                child.material.aoMap = stored.aoMap;
-                child.material.emissiveMap = stored.emissiveMap;
-                child.material.color = stored.color.clone();
-                child.material.needsUpdate = true;
-            });
-            setColorMode('original');
-        } else {
-            // APPLY COLOR MODE (remove texture, show pure color)
-            console.log(`Applying color mode: ${modelColor}`);
-            model.traverse((child: any) => {
-                if (!child.isMesh || !child.material) return;
-
-                // Remove texture so color becomes visible
-                child.material.map = null;
-
-                // Keep other PBR maps for realistic shading
-                // normalMap, roughnessMap, etc. stay active
-
-                // Apply selected color
-                child.material.color = new THREE.Color(modelColor);
-                child.material.needsUpdate = true;
-            });
-            setColorMode('custom');
-        }
-    }, [model, modelColor, stickerImage]);
-
-    /* ------------------------------------------------
-        STICKER OVERLAY (works in both modes)
     -------------------------------------------------- */
     useEffect(() => {
         if (!model) return;
 
-        // Restore when sticker removed
+        if (modelColor === "reset" || modelColor === "original") {
+            setColorMode('original');
+
+            // Only update materials if no sticker is active
+            if (!stickerImage) {
+                model.traverse((child: any) => {
+                    if (!child.isMesh || !child.material) return;
+                    const stored = originalMaps.current.get(child);
+                    if (!stored) return;
+
+                    child.material.map = stored.map;
+                    child.material.normalMap = stored.normalMap;
+                    child.material.roughnessMap = stored.roughnessMap;
+                    child.material.metalnessMap = stored.metalnessMap;
+                    child.material.aoMap = stored.aoMap;
+                    child.material.emissiveMap = stored.emissiveMap;
+                    child.material.color = stored.color.clone();
+                    child.material.needsUpdate = true;
+                });
+            }
+        } else {
+            setColorMode('custom');
+
+            // Only update materials if no sticker is active
+            if (!stickerImage) {
+                model.traverse((child: any) => {
+                    if (!child.isMesh || !child.material) return;
+
+                    child.material.map = null;
+                    child.material.color = new THREE.Color(modelColor);
+                    child.material.needsUpdate = true;
+                });
+            }
+        }
+    }, [model, modelColor, stickerImage]);
+
+    /* ------------------------------------------------
+        STICKER OVERLAY
+    -------------------------------------------------- */
+    useEffect(() => {
+        if (!model) return;
+
         if (!stickerImage) {
             // Restore based on current mode
             model.traverse((child: any) => {
@@ -197,13 +186,11 @@ function Model3D({
                 if (!stored) return;
 
                 if (colorMode === 'original') {
-                    // Restore original textures
                     child.material.map = stored.map;
                     child.material.color = stored.color.clone();
                 } else {
-                    // Restore color mode (no texture)
                     child.material.map = null;
-                    child.material.color = new THREE.Color(modelColor !== "reset" ? modelColor : stored.color);
+                    child.material.color = new THREE.Color(modelColor !== "reset" && modelColor !== "original" ? modelColor : stored.color);
                 }
 
                 child.material.normalMap = stored.normalMap;
@@ -216,7 +203,7 @@ function Model3D({
             return;
         }
 
-        // Build composite texture with sticker
+        // Build composite texture
         const stickerImg = new Image();
         stickerImg.crossOrigin = "anonymous";
 
@@ -226,7 +213,6 @@ function Model3D({
                 const stored = originalMaps.current.get(child);
                 if (!stored) return;
 
-                // Determine base: either original texture or current color
                 const base = colorMode === 'original' ? stored.map?.image : null;
                 const texSize = base?.width || 2048;
 
@@ -235,15 +221,15 @@ function Model3D({
                 const ctx = canvas.getContext("2d");
                 if (!ctx) return;
 
-                // Draw base (original texture OR solid color)
+                // Draw base
                 if (base) {
                     ctx.drawImage(base, 0, 0, texSize, texSize);
                 } else {
-                    ctx.fillStyle = modelColor !== "reset" ? modelColor : stored.color.getStyle();
+                    ctx.fillStyle = (modelColor !== "reset" && modelColor !== "original") ? modelColor : stored.color.getStyle();
                     ctx.fillRect(0, 0, texSize, texSize);
                 }
 
-                // Draw sticker on top
+                // Draw sticker
                 const size = texSize * stickerPosition.scale;
                 const x = stickerPosition.uvX * texSize - size / 2;
                 const y = (1 - stickerPosition.uvY) * texSize - size / 2;
