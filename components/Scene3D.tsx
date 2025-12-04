@@ -21,7 +21,6 @@ const MODEL_CONFIG: Record<
         zOffset?: number;
     }
 > = {
-
     "/models/Tshirt_Oversized.glb": {
         targetSize: 2,
         groundOffset: -15,
@@ -35,27 +34,24 @@ const MODEL_CONFIG: Record<
         groundOffset: -6,
         xOffset: 0,
         yOffset: 5.5,
-        zOffset: 0, // FIX rotation center
+        zOffset: 0,
     },
 
+    "/models/FemaleHoodie/female_cloth1.glb": {
+        targetSize: 2.5,
+        groundOffset: -6,
+        xOffset: 0,
+        yOffset: 5.5,
+        zOffset: 0,
+    },
 
-
-
-    // "/models/Tshirt_Oversized.glb": {
-    //     targetSize: 3,
-    //     groundOffset: -0.1,
-    //     xOffset: 0,
-    //     yOffset: 0,
-    //     zOffset: 0,
-    // },
-
-    // "/models/female_cloth1.glb": {
-    //     targetSize: 100,
-    //     groundOffset: -0.5,
-    //     xOffset: 0,
-    //     yOffset: 0,
-    //     zOffset: -0.4, // Fix model rotation center
-    // },
+    "/models/oversized_t-shirt.glb": {
+        targetSize: 2.5,
+        groundOffset: -6,
+        xOffset: 0,
+        yOffset: 5.5,
+        zOffset: 0,
+    },
 
     default: {
         targetSize: 3,
@@ -67,20 +63,44 @@ const MODEL_CONFIG: Record<
 };
 
 /* --------------------------------------------
-   MODEL COMPONENT
+   DECAL POSITION TYPES
+--------------------------------------------- */
+export interface DecalPosition {
+    x: number;
+    y: number;
+    z: number;
+    rotationX: number;
+    rotationY: number;
+    rotationZ: number;
+    scale: number;
+}
+
+/* --------------------------------------------
+   MODEL COMPONENT with UV Sticker Overlay
 --------------------------------------------- */
 
 interface Model3DProps {
     modelPath: string;
     modelColor: string;
-    decalImage: string | null;
+    stickerImage: string | null;
+    stickerPosition: { uvX: number; uvY: number; scale: number };
     setShadowFloor: (y: number) => void;
     onModelLoad: () => void;
 }
 
-function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoad }: Model3DProps) {
+function Model3D({
+    modelPath,
+    modelColor,
+    stickerImage,
+    stickerPosition,
+    setShadowFloor,
+    onModelLoad,
+}: Model3DProps) {
     const groupRef = useRef<THREE.Group>(null);
     const [model, setModel] = useState<THREE.Object3D | null>(null);
+    const [originalTextures, setOriginalTextures] = useState<Map<THREE.Mesh, THREE.Texture | null>>(new Map());
+    const [compositeTextures, setCompositeTextures] = useState<Map<THREE.Mesh, THREE.CanvasTexture>>(new Map());
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     /* ------------------------------------------------
         LOAD AND POSITION MODEL
@@ -99,7 +119,6 @@ function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoa
 
                 /** 1. Compute original bounding box */
                 const box = new THREE.Box3().setFromObject(object);
-                const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
@@ -124,10 +143,19 @@ function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoa
                 const shadowY = groundedY + 0.02;
                 setShadowFloor(shadowY);
 
-                console.log(
-                    `Loaded ${modelPath}: scale=${scale.toFixed(3)}, groundedY=${groundedY.toFixed(3)}, shadowY=${shadowY.toFixed(3)}`
-                );
+                /** 7. Store original textures */
+                const texturesMap = new Map<THREE.Mesh, THREE.Texture | null>();
+                object.traverse((child: any) => {
+                    if (child.isMesh && child.material) {
+                        // Store the original texture (if any)
+                        const originalTex = child.material.map ? child.material.map.clone() : null;
+                        texturesMap.set(child, originalTex);
+                    }
+                });
 
+                console.log(`Loaded ${modelPath}: scale=${scale.toFixed(3)}`);
+
+                setOriginalTextures(texturesMap);
                 setModel(object);
                 onModelLoad();
             },
@@ -135,7 +163,9 @@ function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoa
             (err) => console.error("Model loading error:", err)
         );
 
-        return () => { draco.dispose() };
+        return () => {
+            draco.dispose();
+        };
     }, [modelPath]);
 
     /* ------------------------------------------------
@@ -146,35 +176,103 @@ function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoa
 
         model.traverse((child: any) => {
             if (child.isMesh && child.material) {
-                const mat = child.material.clone();
+                const mat = child.material;
                 if ("color" in mat) {
-                    mat.color = new THREE.Color(modelColor);
+                    // Only tint if no texture is present
+                    if (!mat.map) {
+                        mat.color = new THREE.Color(modelColor);
+                    } else {
+                        mat.color = new THREE.Color('#ffffff');
+                    }
                     mat.needsUpdate = true;
                 }
-                child.material = mat;
             }
         });
     }, [model, modelColor]);
 
     /* ------------------------------------------------
-        APPLY DECAL TEXTURE
+        CREATE COMPOSITE TEXTURE (Original + Sticker)
     -------------------------------------------------- */
     useEffect(() => {
-        if (!model || !decalImage) return;
-
-        const texLoader = new THREE.TextureLoader();
-        texLoader.load(decalImage, (tex) => {
-            model.traverse((child: any) => {
+        if (!model || !stickerImage) {
+            // Remove stickers and restore original textures
+            model?.traverse((child: any) => {
                 if (child.isMesh && child.material) {
-                    child.material.map = tex;
+                    const originalTex = originalTextures.get(child);
+                    child.material.map = originalTex;
+                    if ("color" in child.material) {
+                        child.material.color = new THREE.Color(originalTex ? '#ffffff' : modelColor);
+                    }
                     child.material.needsUpdate = true;
                 }
             });
-        });
-    }, [model, decalImage]);
+            return;
+        }
+
+        // Load sticker image
+        const stickerImg = new Image();
+        stickerImg.crossOrigin = "anonymous";
+        stickerImg.onload = () => {
+            model.traverse((child: any) => {
+                if (child.isMesh && child.material) {
+                    const originalTex = originalTextures.get(child);
+
+                    // Create canvas for composite texture
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+
+                    // Set canvas size based on original texture or default
+                    const texSize = originalTex ?
+                        (originalTex.image?.width || 2048) : 2048;
+                    canvas.width = texSize;
+                    canvas.height = texSize;
+
+                    // Draw original texture (if exists)
+                    if (originalTex && originalTex.image) {
+                        ctx.drawImage(originalTex.image, 0, 0, texSize, texSize);
+                    } else {
+                        // Fill with white if no original texture
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, texSize, texSize);
+                    }
+
+                    // Calculate sticker position and size on UV map
+                    // uvX and uvY are 0-1 range, where (0,0) is bottom-left in UV space
+                    const stickerSize = texSize * stickerPosition.scale;
+                    const stickerX = (stickerPosition.uvX) * texSize - stickerSize / 2;
+                    const stickerY = (1 - stickerPosition.uvY) * texSize - stickerSize / 2; // Flip Y for canvas
+
+                    // Draw sticker on top
+                    ctx.drawImage(
+                        stickerImg,
+                        stickerX,
+                        stickerY,
+                        stickerSize,
+                        stickerSize
+                    );
+
+                    // Create texture from canvas
+                    const compositeTexture = new THREE.CanvasTexture(canvas);
+                    compositeTexture.colorSpace = THREE.SRGBColorSpace;
+                    compositeTexture.flipY = false;
+                    compositeTexture.needsUpdate = true;
+
+                    // Apply composite texture to material
+                    child.material.map = compositeTexture;
+                    if ("color" in child.material) {
+                        child.material.color = new THREE.Color('#ffffff');
+                    }
+                    child.material.needsUpdate = true;
+                }
+            });
+        };
+        stickerImg.src = stickerImage;
+
+    }, [model, stickerImage, stickerPosition, originalTextures, modelColor]);
 
     /* ------------------------------------------------
-        RETURN MODEL — no effects altering scene graph
+        RETURN MODEL
     -------------------------------------------------- */
     return (
         <group ref={groupRef}>
@@ -190,7 +288,8 @@ function Model3D({ modelPath, modelColor, decalImage, setShadowFloor, onModelLoa
 interface Scene3DProps {
     modelPath: string;
     modelColor: string;
-    decalImage: string | null;
+    stickerImage: string | null;
+    stickerPosition: { uvX: number; uvY: number; scale: number };
     backgroundColor?: string;
     onModelLoad: () => void;
 }
@@ -198,7 +297,8 @@ interface Scene3DProps {
 export default function Scene3D({
     modelPath,
     modelColor,
-    decalImage,
+    stickerImage,
+    stickerPosition = { uvX: 0.5, uvY: 0.5, scale: 0.2 },
     backgroundColor = "#212121",
     onModelLoad,
 }: Scene3DProps) {
@@ -218,7 +318,8 @@ export default function Scene3D({
                 <Model3D
                     modelPath={modelPath}
                     modelColor={modelColor}
-                    decalImage={decalImage}
+                    stickerImage={stickerImage}
+                    stickerPosition={stickerPosition}
                     setShadowFloor={setShadowFloor}
                     onModelLoad={onModelLoad}
                 />
@@ -239,10 +340,3 @@ export default function Scene3D({
         </div>
     );
 }
-
-
-
-
-
-
-

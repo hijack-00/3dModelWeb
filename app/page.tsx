@@ -24,10 +24,22 @@ export default function Home() {
                 icon: '👕'
             },
             {
-                name: 'Female Outfit',
+                name: 'Female Cloth',
                 fileName: 'female_cloth1.glb',
                 path: '/models/female_cloth1.glb',
                 icon: '👗'
+            },
+            {
+                name: 'Female Hoodie',
+                fileName: 'female_cloth1.glb',
+                path: '/models/FemaleHoodie/female_cloth1.glb',
+                icon: '🧥'
+            },
+            {
+                name: 'Oversized Tshirt',
+                fileName: 'oversized_t-shirt.glb',
+                path: '/models/oversized_t-shirt.glb',
+                icon: '👕'
             }
         ];
         setModels(availableModels);

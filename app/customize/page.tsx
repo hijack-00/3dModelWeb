@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { HexColorPicker } from 'react-colorful';
@@ -19,31 +19,86 @@ const Scene3D = dynamic(() => import('@/components/Scene3D'), {
     ),
 });
 
-type ToolType = 'color' | 'edit' | 'background' | 'rotate' | 'hdr' | 'view' | null;
+type ToolType = 'color' | 'edit' | 'background' | 'rotate' | 'hdr' | 'view' | 'decal' | null;
 
 function CustomizeContent() {
     const searchParams = useSearchParams();
     const modelParam = searchParams.get('model');
 
-    const [modelPath, setModelPath] = useState(modelParam || '/models/Tshirt_Oversized.glb');
+    const [modelPath, setModelPath] = useState(modelParam || '/models/FemaleHoodie/female_cloth1.glb');
     const [modelColor, setModelColor] = useState('#FFFFFF');
-    const [decalImage, setDecalImage] = useState<string | null>(null);
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+    const [stickerImage, setStickerImage] = useState<string | null>(null);
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [activeTool, setActiveTool] = useState<ToolType>(null);
     const [autoRotate, setAutoRotate] = useState(false);
     const canvasRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const frameRef = useRef<HTMLDivElement>(null);
 
-    // Handle image upload for decal
+    // Sticker positioning in UV space (0-1 range)
+    const [stickerPosition, setStickerPosition] = useState({
+        uvX: 0.5,  // Center horizontally on UV map
+        uvY: 0.5,  // Center vertically on UV map
+        scale: 0.2, // Size relative to texture (0.2 = 20% of texture size)
+    });
+
+    // Frame image position for visual feedback (percentage)
+    const [frameImagePos, setFrameImagePos] = useState({ x: 50, y: 50 });
+    const [isDragging, setIsDragging] = useState(false);
+
+    // Handle multiple image uploads
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                setDecalImage(event.target?.result as string);
-            };
-            reader.readAsDataURL(file);
+        const files = e.target.files;
+        if (files) {
+            const newImages: string[] = [];
+            Array.from(files).forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const result = event.target?.result as string;
+                    newImages.push(result);
+                    if (newImages.length === files.length) {
+                        setUploadedImages([...uploadedImages, ...newImages]);
+                        if (!stickerImage) {
+                            setStickerImage(newImages[0]);
+                            setSelectedImageIndex(uploadedImages.length);
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
         }
+    };
+
+    // Handle image drag in frame - maps to UV coordinates
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging || !frameRef.current) return;
+
+        const rect = frameRef.current.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+        // Clamp values between 0 and 100
+        const clampedX = Math.max(0, Math.min(100, x));
+        const clampedY = Math.max(0, Math.min(100, y));
+
+        setFrameImagePos({ x: clampedX, y: clampedY });
+
+        // Map frame position to UV coordinates (0-1 range)
+        const uvX = clampedX / 100;
+        const uvY = clampedY / 100;
+
+        setStickerPosition(prev => ({
+            ...prev,
+            uvX,
+            uvY,
+        }));
+    };
+
+    // Handle image drag end
+    const handleMouseUp = () => {
+        setIsDragging(false);
     };
 
     // Take screenshot
@@ -64,7 +119,10 @@ function CustomizeContent() {
         const projectData = {
             modelPath,
             modelColor,
-            decalImage,
+            uploadedImages,
+            selectedImageIndex,
+            stickerImage,
+            stickerPosition,
             timestamp: Date.now(),
         };
         localStorage.setItem('3d-mockup-project', JSON.stringify(projectData));
@@ -84,12 +142,62 @@ function CustomizeContent() {
                 Back to Gallery
             </Link>
 
+            {/* Draggable Sticker Frame - Top Right with transparent background */}
+            {stickerImage && (
+                <div
+                    ref={frameRef}
+                    className="absolute top-20 right-5 w-[300px] h-[300px] border-2 border-dashed border-white/30 rounded-xl z-40"
+                    style={{ backgroundColor: 'transparent' }}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                >
+                    <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-white text-xs">
+                        Drag to position sticker on UV map
+                    </div>
+
+                    {/* Draggable Image */}
+                    <img
+                        src={stickerImage}
+                        alt="Sticker"
+                        className="absolute w-20 h-20 object-contain cursor-move"
+                        style={{
+                            left: `${frameImagePos.x}%`,
+                            top: `${frameImagePos.y}%`,
+                            transform: 'translate(-50%, -50%)',
+                        }}
+                        onMouseDown={() => setIsDragging(true)}
+                        draggable={false}
+                    />
+
+                    {/* Uploaded Images Thumbnails */}
+                    {uploadedImages.length > 0 && (
+                        <div className="absolute bottom-2 left-2 right-2 flex gap-2 overflow-x-auto p-2 bg-black/60 rounded">
+                            {uploadedImages.map((img, index) => (
+                                <img
+                                    key={index}
+                                    src={img}
+                                    alt={`Image ${index + 1}`}
+                                    className={`w-12 h-12 object-contain cursor-pointer rounded border-2 ${selectedImageIndex === index ? 'border-[#B0A3F0]' : 'border-white/30'
+                                        }`}
+                                    onClick={() => {
+                                        setSelectedImageIndex(index);
+                                        setStickerImage(img);
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* 3D Canvas */}
             <div ref={canvasRef} className="w-full h-full" style={{ pointerEvents: 'auto', touchAction: 'none' }}>
                 <Scene3D
                     modelPath={modelPath}
                     modelColor={modelColor}
-                    decalImage={decalImage}
+                    stickerImage={stickerImage}
+                    stickerPosition={stickerPosition}
                     onModelLoad={() => setIsModelLoaded(true)}
                 />
             </div>
@@ -141,6 +249,19 @@ function CustomizeContent() {
                         <path d="M464 448H48c-26.51 0-48-21.49-48-48V112c0-26.51 21.49-48 48-48h416c26.51 0 48 21.49 48 48v288c0 26.51-21.49 48-48 48zM112 120c-30.928 0-56 25.072-56 56s25.072 56 56 56 56-25.072 56-56-25.072-56-56-56zM64 384h384V272l-87.515-87.515c-4.686-4.686-12.284-4.686-16.971 0L208 320l-55.515-55.515c-4.686-4.686-12.284-4.686-16.971 0L64 336v48z"></path>
                     </svg>
                     Edit
+                </button>
+
+                {/* Sticker Size Button */}
+                <button
+                    onClick={() => setActiveTool(activeTool === 'decal' ? null : 'decal')}
+                    className={`flex flex-col items-center py-4 px-5 text-[13px] font-medium rounded-xl cursor-pointer min-w-[70px] transition-all backdrop-blur-[10px] ${activeTool === 'decal' ? 'bg-white/10 text-white shadow-lg' : 'bg-white/5 text-[#b0b0b0]'
+                        }`}
+                    disabled={!stickerImage}
+                >
+                    <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 512 512" height="20" width="20" className="mb-2">
+                        <path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path>
+                    </svg>
+                    Size
                 </button>
 
                 {/* Background Button */}
@@ -200,29 +321,36 @@ function CustomizeContent() {
                         <HexColorPicker color={modelColor} onChange={setModelColor} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <div className="grid grid-cols-2 gap-1 w-[120px]">
-                            <button className="px-2 py-2 bg-[#B0A3F0] text-white border border-[#B0A3F0] rounded-[5px] text-[10px] font-semibold">
-                                All
-                            </button>
-                            <button className="px-2 py-2 bg-white/8 text-white border border-white/15 rounded-[5px] text-[10px] font-semibold">
-                                Body
-                            </button>
-                        </div>
                         <div className="px-2 py-1.5 bg-white/8 rounded-[5px] flex items-center gap-1.5 border border-white/10 w-[120px]">
                             <div className="w-4 h-4 rounded-[3px] border-[1.5px] border-white/40" style={{ background: modelColor }}></div>
                             <span className="text-white text-[9px] font-mono font-semibold flex-1 overflow-hidden text-ellipsis">{modelColor}</span>
                         </div>
+                        <button
+                            onClick={() => {
+                                setModelColor('#FFFFFF');
+                                setStickerImage(null);
+                                setUploadedImages([]);
+                            }}
+                            className="px-2 py-2 bg-white/8 hover:bg-white/15 text-white border border-white/15 rounded-[5px] text-[10px] font-semibold transition-all flex items-center justify-center gap-1.5 w-[120px]"
+                            title="Reset to original color"
+                        >
+                            <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 512 512" height="12" width="12">
+                                <path d="M370.72 133.28C339.458 104.008 298.888 87.962 255.848 88c-77.458.068-144.328 53.178-162.791 126.85-1.344 5.363-6.122 9.15-11.651 9.15H24.103c-7.498 0-13.194-6.807-11.807-14.176C33.933 94.924 134.813 8 256 8c66.448 0 126.791 26.136 171.315 68.685L463.03 40.97C478.149 25.851 504 36.559 504 57.941V192c0 13.255-10.745 24-24 24H345.941c-21.382 0-32.09-25.851-16.971-40.971l41.75-41.749zM32 296h134.059c21.382 0 32.09 25.851 16.971 40.971l-41.75 41.75c31.262 29.273 71.835 45.319 114.876 45.28 77.418-.07 144.315-53.144 162.787-126.849 1.344-5.363 6.122-9.15 11.651-9.15h57.304c7.498 0 13.194 6.807 11.807 14.176C478.067 417.076 377.187 504 256 504c-66.448 0-126.791-26.136-171.315-68.685L48.97 471.03C33.851 486.149 8 475.441 8 454.059V320c0-13.255 10.745-24 24-24z"></path>
+                            </svg>
+                            Reset
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* Edit Panel - Image Upload */}
+            {/* Edit Panel - Multiple Image Upload */}
             {activeTool === 'edit' && (
                 <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] backdrop-blur-[20px] p-4 rounded-2xl border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)] z-40">
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handleImageUpload}
                         className="hidden"
                     />
@@ -233,9 +361,49 @@ function CustomizeContent() {
                         <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 512 512" height="12" width="12">
                             <path d="M296 384h-80c-13.3 0-24-10.7-24-24V192h-87.7c-17.8 0-26.7-21.5-14.1-34.1L242.3 5.7c7.5-7.5 19.8-7.5 27.3 0l152.2 152.2c12.6 12.6 3.7 34.1-14.1 34.1H320v168c0 13.3-10.7 24-24 24zm216-8v112c0 13.3-10.7 24-24 24H24c-13.3 0-24-10.7-24-24V376c0-13.3 10.7-24 24-24h136v8c0 30.9 25.1 56 56 56h80c30.9 0 56-25.1 56-56v-8h136c13.3 0 24 10.7 24 24zm-124 88c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20zm64 0c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20z"></path>
                         </svg>
-                        Upload Design
+                        Upload Sticker Images
                     </button>
-                    <p className="text-white/60 text-[11px] mt-2 text-center">PNG or JPG (Max 10MB)</p>
+                    <p className="text-white/60 text-[11px] mt-2 text-center">PNG or JPG (Max 10MB each)</p>
+                    {uploadedImages.length > 0 && (
+                        <p className="text-white text-[10px] mt-1 text-center">{uploadedImages.length} image(s) uploaded</p>
+                    )}
+                </div>
+            )}
+
+            {/* Sticker Size Panel */}
+            {activeTool === 'decal' && stickerImage && (
+                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] backdrop-blur-[20px] p-4 rounded-2xl border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)] z-40 min-w-[320px]">
+                    <h3 className="text-white text-sm font-semibold mb-3">Sticker Size</h3>
+
+                    <div className="space-y-2">
+                        <div>
+                            <label className="text-white/70 text-[10px] block mb-1">Scale (% of texture)</label>
+                            <input
+                                type="range"
+                                min="0.05"
+                                max="0.5"
+                                step="0.01"
+                                value={stickerPosition.scale}
+                                onChange={(e) => setStickerPosition({ ...stickerPosition, scale: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <span className="text-white/50 text-[9px]">{(stickerPosition.scale * 100).toFixed(0)}%</span>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                setStickerPosition({
+                                    uvX: 0.5,
+                                    uvY: 0.5,
+                                    scale: 0.2,
+                                });
+                                setFrameImagePos({ x: 50, y: 50 });
+                            }}
+                            className="w-full mt-3 px-3 py-2 bg-white/8 hover:bg-white/15 text-white border border-white/15 rounded-lg text-[11px] font-semibold transition-all"
+                        >
+                            Reset Position & Size
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

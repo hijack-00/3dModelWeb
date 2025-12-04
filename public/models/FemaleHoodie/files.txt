@@ -1,0 +1,7 @@
+Meshes:
+mesh
+mesh-1
+Textures:
+lambert2SG_baseColor.png
+lambert2SG_metallicRoughness.png
+lambert2SG_normal.png
