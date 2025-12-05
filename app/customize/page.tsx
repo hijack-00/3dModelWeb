@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import { useState, useRef, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { HexColorPicker } from 'react-colorful';
@@ -46,7 +46,10 @@ function CustomizeContent() {
 
     // Frame image position for visual feedback (percentage)
     const [frameImagePos, setFrameImagePos] = useState({ x: 50, y: 50 });
+    const [frameImageSize, setFrameImageSize] = useState(80); // Size in pixels
     const [isDragging, setIsDragging] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
+    const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, size: 0 });
 
     // Handle multiple image uploads
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,9 +74,85 @@ function CustomizeContent() {
         }
     };
 
+    // Global mouse event listeners to ensure drag/resize stops even outside frame
+    useEffect(() => {
+        const handleGlobalMouseUp = () => {
+            setIsDragging(false);
+            setIsResizing(false);
+        };
+
+        const handleGlobalMouseMove = (e: MouseEvent) => {
+            if (!frameRef.current) return;
+
+            // Handle resize
+            if (isResizing) {
+                const deltaX = e.clientX - resizeStart.x;
+                const deltaY = e.clientY - resizeStart.y;
+                const delta = Math.max(deltaX, deltaY);
+                const newSize = Math.max(40, Math.min(200, resizeStart.size + delta));
+
+                setFrameImageSize(newSize);
+
+                const scale = 0.05 + ((newSize - 40) / (200 - 40)) * 0.45;
+                setStickerPosition(prev => ({ ...prev, scale }));
+            }
+
+            // Handle drag
+            if (isDragging) {
+                const rect = frameRef.current.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+                const clampedX = Math.max(0, Math.min(100, x));
+                const clampedY = Math.max(0, Math.min(100, y));
+
+                setFrameImagePos({ x: clampedX, y: clampedY });
+
+                const uvX = clampedX / 100;
+                const uvY = clampedY / 100;
+
+                setStickerPosition(prev => ({
+                    ...prev,
+                    uvX,
+                    uvY,
+                }));
+            }
+        };
+
+        if (isDragging || isResizing) {
+            window.addEventListener('mouseup', handleGlobalMouseUp);
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+        }
+
+        return () => {
+            window.removeEventListener('mouseup', handleGlobalMouseUp);
+            window.removeEventListener('mousemove', handleGlobalMouseMove);
+        };
+    }, [isDragging, isResizing, resizeStart, frameImageSize]);
+
+
     // Handle image drag in frame - maps to UV coordinates
     const handleMouseMove = (e: React.MouseEvent) => {
-        if (!isDragging || !frameRef.current) return;
+        if (!frameRef.current) return;
+
+        // Handle resize
+        if (isResizing) {
+            const deltaX = e.clientX - resizeStart.x;
+            const deltaY = e.clientY - resizeStart.y;
+            const delta = Math.max(deltaX, deltaY);
+            const newSize = Math.max(40, Math.min(200, resizeStart.size + delta));
+
+            setFrameImageSize(newSize);
+
+            // Map frame size to sticker scale (0.05 - 0.5)
+            // 40px = 0.05 scale, 200px = 0.5 scale
+            const scale = 0.05 + ((newSize - 40) / (200 - 40)) * 0.45;
+            setStickerPosition(prev => ({ ...prev, scale }));
+            return;
+        }
+
+        // Handle drag
+        if (!isDragging) return;
 
         const rect = frameRef.current.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -96,9 +175,21 @@ function CustomizeContent() {
         }));
     };
 
+    // Handle resize start
+    const handleResizeStart = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsResizing(true);
+        setResizeStart({
+            x: e.clientX,
+            y: e.clientY,
+            size: frameImageSize
+        });
+    };
+
     // Handle image drag end
     const handleMouseUp = () => {
         setIsDragging(false);
+        setIsResizing(false);
     };
 
     // Take screenshot
@@ -153,22 +244,39 @@ function CustomizeContent() {
                     onMouseLeave={handleMouseUp}
                 >
                     <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-white text-xs">
-                        Drag to position sticker on UV map
+                        Drag to position • Use handle to resize
                     </div>
 
-                    {/* Draggable Image */}
-                    <img
-                        src={stickerImage}
-                        alt="Sticker"
-                        className="absolute w-20 h-20 object-contain cursor-move"
+                    {/* Draggable & Resizable Image */}
+                    <div
+                        className="absolute"
                         style={{
                             left: `${frameImagePos.x}%`,
                             top: `${frameImagePos.y}%`,
                             transform: 'translate(-50%, -50%)',
+                            width: `${frameImageSize}px`,
+                            height: `${frameImageSize}px`,
                         }}
-                        onMouseDown={() => setIsDragging(true)}
-                        draggable={false}
-                    />
+                    >
+                        <img
+                            src={stickerImage}
+                            alt="Sticker"
+                            className="w-full h-full object-contain cursor-move select-none"
+                            onMouseDown={() => setIsDragging(true)}
+                            draggable={false}
+                        />
+
+                        {/* Resize Handle */}
+                        <div
+                            className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#B0A3F0] rounded-full cursor-nwse-resize flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                            onMouseDown={handleResizeStart}
+                            title="Drag to resize"
+                        >
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                        </div>
+                    </div>
 
                     {/* Uploaded Images Thumbnails */}
                     {uploadedImages.length > 0 && (
@@ -382,7 +490,13 @@ function CustomizeContent() {
                                 max="0.5"
                                 step="0.01"
                                 value={stickerPosition.scale}
-                                onChange={(e) => setStickerPosition({ ...stickerPosition, scale: parseFloat(e.target.value) })}
+                                onChange={(e) => {
+                                    const scale = parseFloat(e.target.value);
+                                    setStickerPosition({ ...stickerPosition, scale });
+                                    // Sync frame size (0.05 = 40px, 0.5 = 200px)
+                                    const size = 40 + ((scale - 0.05) / 0.45) * (200 - 40);
+                                    setFrameImageSize(size);
+                                }}
                                 className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
                             />
                             <span className="text-white/50 text-[9px]">{(stickerPosition.scale * 100).toFixed(0)}%</span>
@@ -396,6 +510,7 @@ function CustomizeContent() {
                                     scale: 0.2,
                                 });
                                 setFrameImagePos({ x: 50, y: 50 });
+                                setFrameImageSize(80);
                             }}
                             className="w-full mt-3 px-3 py-2 bg-white/8 hover:bg-white/15 text-white border border-white/15 rounded-lg text-[11px] font-semibold transition-all"
                         >

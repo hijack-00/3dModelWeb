@@ -31,8 +31,8 @@ export default function Home() {
             },
             {
                 name: 'Oversized Tshirt 2',
-                fileName: 'oversized_t-shirt.glb',
-                path: '/models/oversized_t-shirt.glb',
+                fileName: 'Tshirt_Oversized.glb',
+                path: '/models/Tshirt_Oversized.glb',
                 icon: '👔' // Pick an emoji
             }
 
