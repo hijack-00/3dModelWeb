@@ -52,9 +52,12 @@ function CustomizeContent(): JSX.Element {
     const [activeTool, setActiveTool] = useState<ToolType>(null);
     const [autoRotate, setAutoRotate] = useState(false);
     const [rotationSpeed, setRotationSpeed] = useState(2);
+    const [rotateBackground, setRotateBackground] = useState(false);
     const [backgroundColor, setBackgroundColor] = useState('#212121');
+    const [environmentBg, setEnvironmentBg] = useState<string | null>(null);
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const environmentInputRef = useRef<HTMLInputElement | null>(null);
     const frameRef = useRef<HTMLDivElement | null>(null);
     const thumbnailRef = useRef<HTMLImageElement | null>(null);
 
@@ -119,6 +122,22 @@ function CustomizeContent(): JSX.Element {
             };
             reader.readAsDataURL(file);
         });
+    };
+
+    // environment image upload
+    const handleEnvironmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const reader = new FileReader();
+        reader.onload = evt => {
+            const data = evt.target?.result;
+            if (typeof data === 'string') {
+                setEnvironmentBg(data);
+            }
+        };
+        reader.readAsDataURL(file);
+        e.target.value = ''; // Reset input
     };
 
     // Global mouse handlers to support drag/resize/rotate across document
@@ -766,7 +785,9 @@ function CustomizeContent(): JSX.Element {
                     stickers={stickerPropsForScene}
                     autoRotate={autoRotate}
                     rotationSpeed={rotationSpeed}
+                    rotateBackground={rotateBackground}
                     backgroundColor={backgroundColor}
+                    environmentBg={environmentBg}
                     onModelLoad={() => { /* noop */ }}
                 />
             </div>
@@ -832,6 +853,18 @@ function CustomizeContent(): JSX.Element {
                         <path d="M22 4V8H18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     <span className="text-xs">{autoRotate ? 'Stop' : 'Rotate'}</span>
+                </button>
+
+                <button
+                    onClick={() => setActiveTool(activeTool === 'hdr' ? null : 'hdr')}
+                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${activeTool === 'hdr' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                        }`}
+                >
+                    <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" />
+                        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                    <span className="text-xs">HDR</span>
                 </button>
             </div>
 
@@ -927,6 +960,102 @@ function CustomizeContent(): JSX.Element {
                                 +
                             </button>
                         </div>
+
+                        {/* Rotate Background Checkbox */}
+                        <div className="mt-3 pt-3 border-t border-white/10">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={rotateBackground}
+                                    onChange={(e) => setRotateBackground(e.target.checked)}
+                                    className="w-4 h-4 rounded border-white/30 bg-white/10 text-[#B0A3F0] focus:ring-2 focus:ring-[#B0A3F0] focus:ring-offset-0 cursor-pointer"
+                                />
+                                <span className="text-white/80 text-sm group-hover:text-white transition-colors">
+                                    Rotate Background
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* HDR/Environment Library modal */}
+            {activeTool === 'hdr' && (
+                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] backdrop-blur-[20px] p-5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 min-w-[320px] max-w-[92vw]">
+                    <div className="mb-3 text-white text-base font-bold text-center">Environment Library</div>
+
+                    {/* Environment grid */}
+                    <div className="grid grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto mb-3.5">
+                        {/* None option */}
+                        <button
+                            title="None"
+                            onClick={() => setEnvironmentBg(null)}
+                            className={`rounded-xl p-0 overflow-hidden transition-all ${environmentBg === null
+                                ? 'border-2 border-[#B0A3F0] bg-white/[0.04]'
+                                : 'border border-white/15 bg-white/[0.04] hover:border-white/30'
+                                }`}
+                        >
+                            <div className="h-[68px] flex items-center justify-center text-white text-xs">None</div>
+                        </button>
+
+                        {/* Predefined environments */}
+                        {[
+                            { name: 'Space', url: '/backgrounds/space.jpg' },
+                            { name: 'Sky', url: '/backgrounds/sky.jpg' },
+                            { name: 'Sunset', url: '/backgrounds/sunset.jpg' },
+                            { name: 'Ocean', url: '/backgrounds/ocean.jpg' },
+                        ].map(env => (
+                            <button
+                                key={env.name}
+                                title={env.name}
+                                onClick={() => setEnvironmentBg(env.url)}
+                                className={`rounded-xl p-0 overflow-hidden transition-all ${environmentBg === env.url
+                                    ? 'border-2 border-[#B0A3F0] bg-white/[0.04]'
+                                    : 'border border-white/15 bg-white/[0.04] hover:border-white/30'
+                                    }`}
+                            >
+                                <div className="w-full h-[68px] overflow-hidden">
+                                    <img
+                                        alt={env.name}
+                                        crossOrigin="anonymous"
+                                        src={env.url}
+                                        className="w-full h-full object-cover block"
+                                    />
+                                </div>
+                                <div className="px-2 py-1.5 text-white text-xs text-center whitespace-nowrap overflow-hidden text-ellipsis">
+                                    {env.name}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="h-px bg-white/8 my-3"></div>
+
+                    {/* Upload input */}
+                    <input
+                        ref={environmentInputRef}
+                        accept="image/*,.hdr,.exr"
+                        type="file"
+                        onChange={handleEnvironmentUpload}
+                        className="hidden"
+                    />
+
+                    {/* Upload button */}
+                    <button
+                        title="Upload custom 360° image"
+                        onClick={() => environmentInputRef.current?.click()}
+                        className="w-full px-3 py-3 text-sm font-bold bg-gradient-to-br from-[#B0A3F0] to-[#B0A3F0] text-white border-none rounded-xl cursor-pointer flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(98,93,245,0.3)] hover:shadow-[0_6px_20px_rgba(98,93,245,0.4)] transition-all"
+                    >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Upload 360° Image
+                    </button>
+
+                    {/* Support text */}
+                    <div className="mt-2 text-[#b0b0b0] text-xs text-center">
+                        Supports HDR, EXR, JPG, PNG
                     </div>
                 </div>
             )}

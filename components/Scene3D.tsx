@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, ContactShadows, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -26,6 +26,8 @@ interface Scene3DProps {
     modelColor: string;
     stickers: StickerForScene[];
     backgroundColor?: string;
+    environmentBg?: string | null;
+    rotateBackground?: boolean;
     onModelLoad?: () => void;
     autoRotate?: boolean;
     rotationSpeed?: number;
@@ -238,18 +240,76 @@ function Model3D(props: {
 
     return <group ref={groupRef}>{model && <primitive object={model} />}</group>;
 }
+// Component to render and optionally rotate the background
+function RotatingBackground({ texture, rotationSpeed, shouldRotate, autoRotate }: { texture: THREE.Texture; rotationSpeed: number; shouldRotate: boolean; autoRotate: boolean }) {
+    const meshRef = useRef<THREE.Mesh>(null);
 
-export default function Scene3D({ modelPath, modelColor, stickers, backgroundColor = '#212121', onModelLoad, autoRotate = false, rotationSpeed = 2 }: Scene3DProps) {
+    // Use useFrame for smooth animation tied to Three.js render loop
+    useFrame(() => {
+        if (!meshRef.current) return;
+
+        if (autoRotate) {
+            // OrbitControls uses this exact formula: angle = 2 * PI / 60 / 60 * autoRotateSpeed
+            const rotationAngle = 2 * Math.PI / 60 / 60 * rotationSpeed;
+
+            if (shouldRotate) {
+                // Background rotates WITH the scene (same direction as camera)
+                // Do nothing - let OrbitControls handle it naturally
+            } else {
+                // Background stays FIXED - counter-rotate to compensate for camera rotation
+                // OrbitControls rotates camera, so we counter-rotate the background
+                meshRef.current.rotation.y -= rotationAngle;
+            }
+        }
+    });
+
+    return (
+        <mesh ref={meshRef} scale={[-1, 1, 1]}>
+            <sphereGeometry args={[500, 60, 40]} />
+            <meshBasicMaterial map={texture} side={THREE.BackSide} />
+        </mesh>
+    );
+}
+
+export default function Scene3D({ modelPath, modelColor, stickers, backgroundColor = '#212121', environmentBg = null, rotateBackground = false, onModelLoad, autoRotate = false, rotationSpeed = 2 }: Scene3DProps) {
     const [shadowFloor, setShadowFloor] = useState(0);
+    const [envTexture, setEnvTexture] = useState<THREE.Texture | null>(null);
+
+    // Load environment texture when environmentBg changes
+    useEffect(() => {
+        if (!environmentBg) {
+            setEnvTexture(null);
+            return;
+        }
+
+        const loader = new THREE.TextureLoader();
+        loader.load(
+            environmentBg,
+            (texture) => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                texture.colorSpace = THREE.SRGBColorSpace;
+                setEnvTexture(texture);
+            },
+            undefined,
+            (err) => {
+                console.error('Failed to load environment texture:', err);
+                setEnvTexture(null);
+            }
+        );
+    }, [environmentBg]);
 
     return (
         <div className="w-full h-full">
             <Canvas shadows>
-                <color attach="background" args={[backgroundColor]} />
+                {!envTexture && <color attach="background" args={[backgroundColor]} />}
                 <PerspectiveCamera makeDefault position={[0, 0, 5]} />
                 <ambientLight intensity={0.5} />
                 <spotLight position={[10, 10, 10]} intensity={1} castShadow />
                 <pointLight position={[-10, -10, -10]} intensity={0.5} />
+
+                {/* Render background sphere if environment texture exists */}
+                {envTexture && <RotatingBackground texture={envTexture} rotationSpeed={rotationSpeed} shouldRotate={rotateBackground} autoRotate={autoRotate} />}
+
                 <Model3D modelPath={modelPath} modelColor={modelColor} stickers={stickers} setShadowFloor={setShadowFloor} onModelLoad={onModelLoad} />
                 <Environment preset="studio" />
                 <ContactShadows position={[0, shadowFloor, 0]} scale={12} opacity={0.5} blur={2} far={15} />
