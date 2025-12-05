@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 /* ============================================
-   MODEL CONFIG
+   MODEL CONFIG 
 ============================================ */
 const MODEL_CONFIG: Record<string, {
     targetSize: number;
@@ -68,6 +68,7 @@ interface Model3DProps {
     modelColor: string;
     stickerImage: string | null;
     stickerPosition: { uvX: number; uvY: number; scale: number };
+    stickerAspectRatio: number;
     setShadowFloor: (y: number) => void;
     onModelLoad: () => void;
 }
@@ -80,6 +81,7 @@ function Model3D({
     modelColor,
     stickerImage,
     stickerPosition,
+    stickerAspectRatio,
     setShadowFloor,
     onModelLoad,
 }: Model3DProps) {
@@ -246,11 +248,23 @@ function Model3D({
                     ctx.fillRect(0, 0, texSize, texSize);
                 }
 
-                // Draw sticker
-                const size = texSize * stickerPosition.scale;
-                const x = stickerPosition.uvX * texSize - size / 2;
-                const y = (1 - stickerPosition.uvY) * texSize - size / 2;
-                ctx.drawImage(stickerImg, x, y, size, size);
+                // Draw sticker with proper aspect ratio
+                const baseSize = texSize * stickerPosition.scale;
+                let stickerWidth, stickerHeight;
+
+                if (stickerAspectRatio > 1) {
+                    // Wide image
+                    stickerWidth = baseSize;
+                    stickerHeight = baseSize / stickerAspectRatio;
+                } else {
+                    // Tall or square image
+                    stickerHeight = baseSize;
+                    stickerWidth = baseSize * stickerAspectRatio;
+                }
+
+                const x = stickerPosition.uvX * texSize - stickerWidth / 2;
+                const y = (1 - stickerPosition.uvY) * texSize - stickerHeight / 2;
+                ctx.drawImage(stickerImg, x, y, stickerWidth, stickerHeight);
 
                 // Create composite
                 const composite = new THREE.CanvasTexture(canvas);
@@ -271,7 +285,7 @@ function Model3D({
         };
 
         stickerImg.src = stickerImage;
-    }, [model, stickerImage, stickerPosition, modelColor, colorMode]);
+    }, [model, stickerImage, stickerPosition, modelColor, colorMode, stickerAspectRatio]);
 
     return (
         <group ref={groupRef}>
@@ -288,6 +302,7 @@ interface Scene3DProps {
     modelColor: string;
     stickerImage: string | null;
     stickerPosition: { uvX: number; uvY: number; scale: number };
+    stickerAspectRatio: number;
     backgroundColor?: string;
     onModelLoad: () => void;
 }
@@ -297,6 +312,7 @@ export default function Scene3D({
     modelColor,
     stickerImage,
     stickerPosition,
+    stickerAspectRatio,
     backgroundColor = "#212121",
     onModelLoad,
 }: Scene3DProps) {
@@ -317,6 +333,7 @@ export default function Scene3D({
                     modelColor={modelColor}
                     stickerImage={stickerImage}
                     stickerPosition={stickerPosition}
+                    stickerAspectRatio={stickerAspectRatio}
                     setShadowFloor={setShadowFloor}
                     onModelLoad={onModelLoad}
                 />

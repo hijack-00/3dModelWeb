@@ -43,6 +43,7 @@ function CustomizeContent() {
         uvY: 0.5,  // Center vertically on UV map
         scale: 0.2, // Size relative to texture (0.2 = 20% of texture size)
     });
+    const [stickerAspectRatio, setStickerAspectRatio] = useState(1); // width/height ratio
 
     // Frame image position for visual feedback (percentage)
     const [frameImagePos, setFrameImagePos] = useState({ x: 50, y: 50 });
@@ -51,16 +52,33 @@ function CustomizeContent() {
     const [isResizing, setIsResizing] = useState(false);
     const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, size: 0 });
 
+    // Crop state for each image (stores crop bounds as percentages)
+    const [imageCrops, setImageCrops] = useState<Record<number, { x: number; y: number; width: number; height: number }>>({});
+    const [isCropping, setIsCropping] = useState(false);
+    const [cropHandle, setCropHandle] = useState<'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
+    const [cropStart, setCropStart] = useState({ x: 0, y: 0, crop: { x: 0, y: 0, width: 100, height: 100 } });
+    const thumbnailRef = useRef<HTMLImageElement>(null);
+
     // Handle multiple image uploads
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
             const newImages: string[] = [];
-            Array.from(files).forEach((file) => {
+            const startIndex = uploadedImages.length;
+
+            Array.from(files).forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const result = event.target?.result as string;
                     newImages.push(result);
+
+                    // Initialize crop bounds to full image for new upload
+                    const imageIndex = startIndex + index;
+                    setImageCrops(prev => ({
+                        ...prev,
+                        [imageIndex]: { x: 0, y: 0, width: 100, height: 100 }
+                    }));
+
                     if (newImages.length === files.length) {
                         setUploadedImages([...uploadedImages, ...newImages]);
                         if (!stickerImage) {
@@ -129,6 +147,107 @@ function CustomizeContent() {
             window.removeEventListener('mousemove', handleGlobalMouseMove);
         };
     }, [isDragging, isResizing, resizeStart, frameImageSize]);
+
+    // Handle crop dragging
+    const handleCropMouseDown = (e: React.MouseEvent, handle: typeof cropHandle) => {
+        e.stopPropagation();
+        setIsCropping(true);
+        setCropHandle(handle);
+
+        const crop = imageCrops[selectedImageIndex] || { x: 0, y: 0, width: 100, height: 100 };
+        setCropStart({
+            x: e.clientX,
+            y: e.clientY,
+            crop: { ...crop }
+        });
+    };
+
+    // Global crop mouse move
+    useEffect(() => {
+        if (!isCropping || !cropHandle || !thumbnailRef.current) return;
+
+        const handleCropMove = (e: MouseEvent) => {
+            const rect = thumbnailRef.current!.getBoundingClientRect();
+            const deltaX = ((e.clientX - cropStart.x) / rect.width) * 100;
+            const deltaY = ((e.clientY - cropStart.y) / rect.height) * 100;
+
+            const newCrop = { ...cropStart.crop };
+
+            // Handle different crop handles
+            if (cropHandle.includes('n')) {
+                newCrop.y = Math.max(0, Math.min(cropStart.crop.y + deltaY, cropStart.crop.y + cropStart.crop.height - 10));
+                newCrop.height = cropStart.crop.height - (newCrop.y - cropStart.crop.y);
+            }
+            if (cropHandle.includes('s')) {
+                newCrop.height = Math.max(10, Math.min(100 - cropStart.crop.y, cropStart.crop.height + deltaY));
+            }
+            if (cropHandle.includes('w')) {
+                newCrop.x = Math.max(0, Math.min(cropStart.crop.x + deltaX, cropStart.crop.x + cropStart.crop.width - 10));
+                newCrop.width = cropStart.crop.width - (newCrop.x - cropStart.crop.x);
+            }
+            if (cropHandle.includes('e')) {
+                newCrop.width = Math.max(10, Math.min(100 - cropStart.crop.x, cropStart.crop.width + deltaX));
+            }
+
+            setImageCrops(prev => ({
+                ...prev,
+                [selectedImageIndex]: newCrop
+            }));
+        };
+
+        const handleCropUp = () => {
+            setIsCropping(false);
+            setCropHandle(null);
+        };
+
+        window.addEventListener('mousemove', handleCropMove);
+        window.addEventListener('mouseup', handleCropUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleCropMove);
+            window.removeEventListener('mouseup', handleCropUp);
+        };
+    }, [isCropping, cropHandle, cropStart, selectedImageIndex]);
+
+    // Apply crop to selected image and update sticker
+    useEffect(() => {
+        if (!uploadedImages[selectedImageIndex]) return;
+
+        const crop = imageCrops[selectedImageIndex] || { x: 0, y: 0, width: 100, height: 100 };
+
+        // Create cropped image using canvas
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Calculate crop dimensions
+            const cropX = (crop.x / 100) * img.width;
+            const cropY = (crop.y / 100) * img.height;
+            const cropWidth = (crop.width / 100) * img.width;
+            const cropHeight = (crop.height / 100) * img.height;
+
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+
+            // Calculate and store aspect ratio
+            const aspectRatio = cropWidth / cropHeight;
+            setStickerAspectRatio(aspectRatio);
+
+            // Draw cropped portion
+            ctx.drawImage(
+                img,
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, cropWidth, cropHeight
+            );
+
+            // Set as sticker image
+            setStickerImage(canvas.toDataURL());
+        };
+        img.src = uploadedImages[selectedImageIndex];
+    }, [selectedImageIndex, imageCrops, uploadedImages]);
 
 
     // Handle image drag in frame - maps to UV coordinates
@@ -242,6 +361,7 @@ function CustomizeContent() {
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
+
                 >
                     <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-white text-xs">
                         Drag to position • Use handle to resize
@@ -278,24 +398,100 @@ function CustomizeContent() {
                         </div>
                     </div>
 
-                    {/* Uploaded Images Thumbnails */}
-                    {uploadedImages.length > 0 && (
-                        <div className="absolute bottom-2 left-2 right-2 flex gap-2 overflow-x-auto p-2 bg-black/60 rounded">
-                            {uploadedImages.map((img, index) => (
-                                <img
+                    {/* Uploaded Images Thumbnails with Crop - Always show when frame is visible */}
+                    <div className="absolute top-[300px] right-0 flex gap-2 w-[300px] overflow-x-auto p-2 bg-black/60 rounded">
+                        {uploadedImages.map((img, index) => {
+                            const isSelected = selectedImageIndex === index;
+                            const crop = imageCrops[index] || { x: 0, y: 0, width: 100, height: 100 };
+
+                            return (
+                                <div
                                     key={index}
-                                    src={img}
-                                    alt={`Image ${index + 1}`}
-                                    className={`w-12 h-12 object-contain cursor-pointer rounded border-2 ${selectedImageIndex === index ? 'border-[#B0A3F0]' : 'border-white/30'
-                                        }`}
-                                    onClick={() => {
-                                        setSelectedImageIndex(index);
-                                        setStickerImage(img);
-                                    }}
-                                />
-                            ))}
+                                    className="relative flex-shrink-0"
+                                    style={{ width: '80px', height: '80px' }}
+                                >
+                                    {/* Base Image */}
+                                    <img
+                                        ref={isSelected ? thumbnailRef : null}
+                                        src={img}
+                                        alt={`Image ${index + 1}`}
+                                        className={`w-full h-full object-cover cursor-pointer rounded border-2 ${isSelected ? 'border-[#B0A3F0]' : 'border-white/30'
+                                            }`}
+                                        onClick={() => {
+                                            setSelectedImageIndex(index);
+                                        }}
+                                    />
+
+                                    {/* Crop Overlay (only on selected) */}
+                                    {isSelected && (
+                                        <div className="absolute inset-0 pointer-events-none">
+                                            {/* Darkened area outside crop */}
+                                            <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+
+                                            {/* Crop area */}
+                                            <div
+                                                className="absolute border-2 border-[#B0A3F0] pointer-events-auto"
+                                                style={{
+                                                    left: `${crop.x}%`,
+                                                    top: `${crop.y}%`,
+                                                    width: `${crop.width}%`,
+                                                    height: `${crop.height}%`,
+                                                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)'
+                                                }}
+                                            >
+                                                {/* Corner Handles */}
+                                                <div
+                                                    className="absolute -top-1 -left-1 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-nwse-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'nw')}
+                                                />
+                                                <div
+                                                    className="absolute -top-1 -right-1 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-nesw-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'ne')}
+                                                />
+                                                <div
+                                                    className="absolute -bottom-1 -left-1 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-nesw-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'sw')}
+                                                />
+                                                <div
+                                                    className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-nwse-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'se')}
+                                                />
+
+                                                {/* Edge Handles */}
+                                                <div
+                                                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-ns-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'n')}
+                                                />
+                                                <div
+                                                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-ns-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 's')}
+                                                />
+                                                <div
+                                                    className="absolute -left-1 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-ew-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'w')}
+                                                />
+                                                <div
+                                                    className="absolute -right-1 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#B0A3F0] rounded-full cursor-ew-resize"
+                                                    onMouseDown={(e) => handleCropMouseDown(e, 'e')}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        {/* Plus Button to Upload More Images */}
+                        <div
+                            className="relative flex-shrink-0 w-20 h-20 bg-white/10 hover:bg-white/20 border-2 border-dashed border-[#B0A3F0] rounded cursor-pointer flex items-center justify-center transition-all group"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Upload more images"
+                        >
+                            <svg className="w-8 h-8 text-[#B0A3F0] group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
 
@@ -306,6 +502,7 @@ function CustomizeContent() {
                     modelColor={modelColor}
                     stickerImage={stickerImage}
                     stickerPosition={stickerPosition}
+                    stickerAspectRatio={stickerAspectRatio}
                     onModelLoad={() => setIsModelLoaded(true)}
                 />
             </div>
