@@ -43,6 +43,52 @@ interface OriginalMaps {
     color: THREE.Color;
 }
 
+// Simple placeholder model that shows while actual model loads
+function PlaceholderModel({ modelColor }: { modelColor: string }) {
+    const groupRef = useRef<THREE.Group>(null);
+
+    // Gentle rotation animation while loading
+    useFrame((state) => {
+        if (groupRef.current) {
+            groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.2;
+        }
+    });
+
+    return (
+        <group ref={groupRef} position={[0, 0, 0]}>
+            {/* Main body */}
+            <mesh position={[0, 0, 0]} castShadow receiveShadow>
+                <boxGeometry args={[1.2, 1.8, 0.4]} />
+                <meshStandardMaterial
+                    color={modelColor}
+                    roughness={0.7}
+                    metalness={0.1}
+                />
+            </mesh>
+
+            {/* Left sleeve */}
+            <mesh position={[-0.8, 0.5, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.4, 0.8, 0.4]} />
+                <meshStandardMaterial
+                    color={modelColor}
+                    roughness={0.7}
+                    metalness={0.1}
+                />
+            </mesh>
+
+            {/* Right sleeve */}
+            <mesh position={[0.8, 0.5, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.4, 0.8, 0.4]} />
+                <meshStandardMaterial
+                    color={modelColor}
+                    roughness={0.7}
+                    metalness={0.1}
+                />
+            </mesh>
+        </group>
+    );
+}
+
 function Model3D(props: {
     modelPath: string;
     modelColor: string;
@@ -238,7 +284,15 @@ function Model3D(props: {
         }
     }, [modelColor, model]);
 
-    return <group ref={groupRef}>{model && <primitive object={model} />}</group>;
+    return (
+        <group ref={groupRef}>
+            {model ? (
+                <primitive object={model} />
+            ) : (
+                <PlaceholderModel modelColor={modelColor} />
+            )}
+        </group>
+    );
 }
 // Component to render and optionally rotate the background
 function RotatingBackground({ texture, rotationSpeed, shouldRotate, autoRotate }: { texture: THREE.Texture; rotationSpeed: number; shouldRotate: boolean; autoRotate: boolean }) {
