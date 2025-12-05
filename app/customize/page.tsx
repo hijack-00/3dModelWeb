@@ -50,6 +50,9 @@ function CustomizeContent(): JSX.Element {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
     const [activeTool, setActiveTool] = useState<ToolType>(null);
+    const [autoRotate, setAutoRotate] = useState(false);
+    const [rotationSpeed, setRotationSpeed] = useState(2);
+    const [backgroundColor, setBackgroundColor] = useState('#212121');
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const frameRef = useRef<HTMLDivElement | null>(null);
@@ -416,11 +419,100 @@ function CustomizeContent(): JSX.Element {
 
     // click outside frame to deselect
     const onFrameClick = (e: React.MouseEvent) => {
-        setSelectedIndex(null);
+        // Only deselect if clicking directly on the frame background (not on stickers or controls)
+        if (e.target === e.currentTarget) {
+            setSelectedIndex(null);
+        }
+    };
+
+    // Control functions for selected sticker
+    const moveSticker = (direction: 'up' | 'down' | 'left' | 'right') => {
+        if (selectedIndex === null || !frameRef.current) return;
+        const rect = frameRef.current.getBoundingClientRect();
+        const moveAmount = 5 / rect.width; // Move 5 pixels in UV space
+
+        setStickers(prev => prev.map((s, i) => {
+            if (i !== selectedIndex) return s;
+            let newUvX = s.uvX;
+            let newUvY = s.uvY;
+
+            if (direction === 'left') newUvX = Math.max(0, s.uvX - moveAmount);
+            if (direction === 'right') newUvX = Math.min(1, s.uvX + moveAmount);
+            if (direction === 'up') newUvY = Math.min(1, s.uvY + moveAmount);
+            if (direction === 'down') newUvY = Math.max(0, s.uvY - moveAmount);
+
+            return { ...s, uvX: newUvX, uvY: newUvY };
+        }));
+    };
+
+    const scaleSticker = (direction: 'up' | 'down' | 'reset') => {
+        if (selectedIndex === null || !frameRef.current) return;
+        const rect = frameRef.current.getBoundingClientRect();
+
+        setStickers(prev => prev.map((s, i) => {
+            if (i !== selectedIndex) return s;
+
+            let newScale = s.scale;
+            if (direction === 'up') newScale = Math.min(0.5, s.scale + 0.02);
+            if (direction === 'down') newScale = Math.max(0.05, s.scale - 0.02);
+            if (direction === 'reset') newScale = 0.15;
+
+            const biggest = Math.max(rect.width, rect.height);
+            const newW = Math.round(newScale * biggest);
+            const newH = Math.round(newW / s.aspectRatio);
+
+            return { ...s, scale: newScale, width: newW, height: newH };
+        }));
+    };
+
+    const rotateSticker = (direction: 'left' | 'right') => {
+        if (selectedIndex === null) return;
+        const angle = direction === 'left' ? -15 : 15;
+        setStickers(prev => prev.map((s, i) =>
+            i === selectedIndex ? { ...s, rotation: (s.rotation + angle) % 360 } : s
+        ));
+    };
+
+    const flipSticker = (direction: 'horizontal' | 'vertical') => {
+        if (selectedIndex === null) return;
+        // For horizontal flip, rotate 180 on Y axis (we'll use rotation for now)
+        // For vertical flip, rotate 180 on X axis
+        setStickers(prev => prev.map((s, i) => {
+            if (i !== selectedIndex) return s;
+            if (direction === 'horizontal') {
+                return { ...s, rotation: (s.rotation + 180) % 360 };
+            }
+            // Vertical flip would need a different approach with transforms
+            return { ...s, rotation: (s.rotation + 180) % 360 };
+        }));
+    };
+
+    const resetSticker = () => {
+        if (selectedIndex === null || !frameRef.current) return;
+        const rect = frameRef.current.getBoundingClientRect();
+        setStickers(prev => prev.map((s, i) => {
+            if (i !== selectedIndex) return s;
+            const biggest = Math.max(rect.width, rect.height);
+            const resetScale = 0.15;
+            const newW = Math.round(resetScale * biggest);
+            const newH = Math.round(newW / s.aspectRatio);
+            return {
+                ...s,
+                uvX: 0.5,
+                uvY: 0.5,
+                scale: resetScale,
+                width: newW,
+                height: newH,
+                rotation: 0
+            };
+        }));
     };
 
     return (
-        <div className="relative h-screen w-screen overflow-hidden font-sans">
+        <div
+            className="relative h-screen w-screen overflow-hidden font-sans"
+            onContextMenu={(e) => e.preventDefault()}
+        >
             <Link href="/" className="absolute top-5 left-5 z-50 px-4 py-2 bg-slate-800/90 text-white rounded-xl hover:bg-slate-700 transition-all flex items-center gap-2">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 Back to Gallery
@@ -512,6 +604,110 @@ function CustomizeContent(): JSX.Element {
                     );
                 })}
 
+                {/* Control Panel for Selected Sticker */}
+                {selectedIndex !== null && (
+                    <div className="absolute top-2 right-2 flex flex-col gap-1 z-50">
+                        {/* Movement Controls - 3x3 Grid */}
+                        <div className="grid grid-cols-3 gap-0.5 mb-1">
+                            <div></div>
+                            <button
+                                title="Move Up"
+                                onClick={() => moveSticker('up')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 448 512" fill="currentColor">
+                                    <path d="M34.9 289.5l-22.2-22.2c-9.4-9.4-9.4-24.6 0-33.9L207 39c9.4-9.4 24.6-9.4 33.9 0l194.3 194.3c9.4 9.4 9.4 24.6 0 33.9L413 289.4c-9.5 9.5-25 9.3-34.3-.4L264 168.6V456c0 13.3-10.7 24-24 24h-32c-13.3 0-24-10.7-24-24V168.6L69.2 289.1c-9.3 9.8-24.8 10-34.3.4z" />
+                                </svg>
+                            </button>
+                            <div></div>
+                            <button
+                                title="Move Left"
+                                onClick={() => moveSticker('left')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 448 512" fill="currentColor">
+                                    <path d="M257.5 445.1l-22.2 22.2c-9.4 9.4-24.6 9.4-33.9 0L7 273c-9.4-9.4-9.4-24.6 0-33.9L201.4 44.7c9.4-9.4 24.6-9.4 33.9 0l22.2 22.2c9.5 9.5 9.3 25-.4 34.3L136.6 216H424c13.3 0 24 10.7 24 24v32c0 13.3-10.7 24-24 24H136.6l120.5 114.8c9.8 9.3 10 24.8.4 34.3z" />
+                                </svg>
+                            </button>
+                            <div></div>
+                            <button
+                                title="Move Right"
+                                onClick={() => moveSticker('right')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 448 512" fill="currentColor">
+                                    <path d="M190.5 66.9l22.2-22.2c9.4-9.4 24.6-9.4 33.9 0L441 239c9.4 9.4 9.4 24.6 0 33.9L246.6 467.3c-9.4 9.4-24.6 9.4-33.9 0l-22.2-22.2c-9.5-9.5-9.3-25 .4-34.3L311.4 296H24c-13.3 0-24-10.7-24-24v-32c0-13.3 10.7-24 24-24h287.4L190.9 101.2c-9.8-9.3-10-24.8-.4-34.3z" />
+                                </svg>
+                            </button>
+                            <div></div>
+                            <button
+                                title="Move Down"
+                                onClick={() => moveSticker('down')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 448 512" fill="currentColor">
+                                    <path d="M413.1 222.5l22.2 22.2c9.4 9.4 9.4 24.6 0 33.9L241 473c-9.4 9.4-24.6 9.4-33.9 0L12.7 278.6c-9.4-9.4-9.4-24.6 0-33.9l22.2-22.2c9.5-9.5 25-9.3 34.3.4L184 343.4V56c0-13.3 10.7-24 24-24h32c13.3 0 24 10.7 24 24v287.4l114.8-120.5c9.3-9.8 24.8-10 34.3-.4z" />
+                                </svg>
+                            </button>
+                            <div></div>
+                        </div>
+
+                        {/* Scale, Reset, Rotate Controls - 3x2 Grid */}
+                        <div className="grid grid-cols-3 gap-0.5">
+                            <button
+                                title="Scale Down"
+                                onClick={() => scaleSticker('down')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 512 512" fill="currentColor">
+                                    <path d="M304 192v32c0 6.6-5.4 12-12 12H124c-6.6 0-12-5.4-12-12v-32c0-6.6 5.4-12 12-12h168c6.6 0 12 5.4 12 12zm201 284.7L476.7 505c-9.4 9.4-24.6 9.4-33.9 0L343 405.3c-4.5-4.5-7-10.6-7-17V372c-35.3 27.6-79.7 44-128 44C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208c0 48.3-16.4 92.7-44 128h16.3c6.4 0 12.5 2.5 17 7l99.7 99.7c9.3 9.4 9.3 24.6 0 34zM344 208c0-75.2-60.8-136-136-136S72 132.8 72 208s60.8 136 136 136 136-60.8 136-136z" />
+                                </svg>
+                            </button>
+                            <button
+                                title="Scale Up"
+                                onClick={() => scaleSticker('up')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 512 512" fill="currentColor">
+                                    <path d="M304 192v32c0 6.6-5.4 12-12 12h-56v56c0 6.6-5.4 12-12 12h-32c-6.6 0-12-5.4-12-12v-56h-56c-6.6 0-12-5.4-12-12v-32c0-6.6 5.4-12 12-12h56v-56c0-6.6 5.4-12 12-12h32c6.6 0 12 5.4 12 12v56h56c6.6 0 12 5.4 12 12zm201 284.7L476.7 505c-9.4 9.4-24.6 9.4-33.9 0L343 405.3c-4.5-4.5-7-10.6-7-17V372c-35.3 27.6-79.7 44-128 44C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208c0 48.3-16.4 92.7-44 128h16.3c6.4 0 12.5 2.5 17 7l99.7 99.7c9.3 9.4 9.3 24.6 0 34zM344 208c0-75.2-60.8-136-136-136S72 132.8 72 208s60.8 136 136 136 136-60.8 136-136z" />
+                                </svg>
+                            </button>
+                            <button
+                                title="Reset Position & Size"
+                                onClick={resetSticker}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 512 512" fill="currentColor">
+                                    <path d="M212.333 224.333H12c-6.627 0-12-5.373-12-12V12C0 5.373 5.373 0 12 0h48c6.627 0 12 5.373 12 12v78.112C117.773 39.279 184.26 7.47 258.175 8.007c136.906.994 246.448 111.623 246.157 248.532C504.041 393.258 393.12 504 256.333 504c-64.089 0-122.496-24.313-166.51-64.215-5.099-4.622-5.334-12.554-.467-17.42l33.967-33.967c4.474-4.474 11.662-4.717 16.401-.525C170.76 415.336 211.58 432 256.333 432c97.268 0 176-78.716 176-176 0-97.267-78.716-176-176-176-58.496 0-110.28 28.476-142.274 72.333h98.274c6.627 0 12 5.373 12 12v48c0 6.627-5.373 12-12 12z" />
+                                </svg>
+                            </button>
+                            <button
+                                title="Rotate Left"
+                                onClick={() => rotateSticker('left')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50 text-xs"
+                            >
+                                ↺
+                            </button>
+                            <button
+                                title="Rotate Right"
+                                onClick={() => rotateSticker('right')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50 text-xs"
+                            >
+                                ↻
+                            </button>
+                            <button
+                                title="Flip Horizontal"
+                                onClick={() => flipSticker('horizontal')}
+                                className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                            >
+                                <svg className="w-2 h-2" viewBox="0 0 512 512" fill="currentColor">
+                                    <path d="M0 168v-16c0-13.255 10.745-24 24-24h360V80c0-21.367 25.899-32.042 40.971-16.971l80 80c9.372 9.373 9.372 24.569 0 33.941l-80 80C409.956 271.982 384 261.456 384 240v-48H24c-13.255 0-24-10.745-24-24zm488 152H128v-48c0-21.314-25.862-32.08-40.971-16.971l-80 80c-9.372 9.373-9.372 24.569 0 33.941l80 80C102.057 463.997 128 453.437 128 432v-48h360c13.255 0 24-10.745 24-24v-16c0-13.255-10.745-24-24-24z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* thumbnails & upload */}
                 <div className="absolute bottom-2 left-2 right-2 flex gap-2 p-2 rounded bg-black/60">
                     <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
@@ -532,12 +728,27 @@ function CustomizeContent(): JSX.Element {
                                         onClick={() => setSelectedIndex(idx)}
                                         draggable={false}
                                     />
+
+                                    {/* Always visible delete button */}
+                                    <button
+                                        title="Remove"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const idToRemove = stickers[idx].id;
+                                            setStickers(prev => prev.filter(st => st.id !== idToRemove).map((st, i) => ({ ...st, zIndex: i })));
+                                            setSelectedIndex(null);
+                                        }}
+                                        className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xs transition-all shadow-md"
+                                    >
+                                        ✕
+                                    </button>
+
+                                    {/* Additional controls when selected */}
                                     {isSelected && (
-                                        <div className="absolute top-0 right-0 flex flex-col gap-1 p-1">
-                                            <button title="Bring Forward" onClick={bringForward} className="bg-white/10 text-white p-1 rounded text-xs">↑</button>
-                                            <button title="Send Backward" onClick={sendBackward} className="bg-white/10 text-white p-1 rounded text-xs">↓</button>
-                                            <button title="Delete" onClick={deleteSelected} className="bg-red-600 text-white p-1 rounded text-xs mt-1">Del</button>
-                                            <button title="Crop" onMouseDown={(e) => handleCropMouseDown(e as any, 'se')} className="bg-white/10 text-white p-1 rounded text-xs mt-1">Crop</button>
+                                        <div className="absolute bottom-0 left-0 right-0 flex gap-1 p-1 bg-black/60">
+                                            <button title="Bring Forward" onClick={bringForward} className="flex-1 bg-white/10 hover:bg-white/20 text-white p-1 rounded text-xs">↑</button>
+                                            <button title="Send Backward" onClick={sendBackward} className="flex-1 bg-white/10 hover:bg-white/20 text-white p-1 rounded text-xs">↓</button>
+                                            <button title="Crop" onMouseDown={(e) => handleCropMouseDown(e as any, 'se')} className="flex-1 bg-white/10 hover:bg-white/20 text-white p-1 rounded text-xs">✂</button>
                                         </div>
                                     )}
                                 </div>
@@ -553,6 +764,9 @@ function CustomizeContent(): JSX.Element {
                     modelPath={modelPath}
                     modelColor={modelColor}
                     stickers={stickerPropsForScene}
+                    autoRotate={autoRotate}
+                    rotationSpeed={rotationSpeed}
+                    backgroundColor={backgroundColor}
                     onModelLoad={() => { /* noop */ }}
                 />
             </div>
@@ -594,15 +808,30 @@ function CustomizeContent(): JSX.Element {
                 </button>
 
                 <button
-                    onClick={() => { rotateSelectedBy(15); setActiveTool('rotate'); }}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${activeTool === 'rotate' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    onClick={() => setActiveTool(activeTool === 'background' ? null : 'background')}
+                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[90px] transition-all ${activeTool === 'background' ? 'bg-[#B0A3F0] text-white' : 'bg-[#B0A3F0] text-white/90 hover:text-white'
+                        } shadow-[0_4px_15px_rgba(98,93,245,0.3)]`}
+                >
+                    <svg className="w-5 h-5 mb-2" viewBox="0 0 512 512" fill="currentColor">
+                        <path d="M204.3 5C104.9 24.4 24.8 104.3 5.2 203.4c-37 187 131.7 326.4 258.8 306.7 41.2-6.4 61.4-54.6 42.5-91.7-23.1-45.4 9.9-98.4 60.9-98.4h79.7c35.8 0 64.8-29.6 64.9-65.3C511.5 97.1 368.1-26.9 204.3 5zM96 320c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm32-128c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm128-64c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm128 64c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32z" />
+                    </svg>
+                    <span className="text-xs">Background</span>
+                </button>
+
+
+                <button
+                    onClick={() => {
+                        setAutoRotate(!autoRotate);
+                        setActiveTool(autoRotate ? null : 'rotate');
+                    }}
+                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${autoRotate ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
                         <path d="M21.888 13.5C21.164 18.311 17.013 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C16.1 2 19.625 4.219 21.33 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M22 4V8H18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="text-xs">Rotate</span>
+                    <span className="text-xs">{autoRotate ? 'Stop' : 'Rotate'}</span>
                 </button>
             </div>
 
@@ -614,6 +843,89 @@ function CustomizeContent(): JSX.Element {
                         <div className="mt-2 flex gap-2">
                             <div style={{ background: modelColor }} className="w-8 h-8 border" />
                             <button onClick={() => setModelColor('reset')} className="px-3 py-1 bg-white/8 rounded">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* edit tool modal */}
+            {activeTool === 'edit' && (
+                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
+                    <div className="flex flex-col items-center gap-3">
+                        <h3 className="text-white text-sm font-medium">Add Images</h3>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex flex-col items-center justify-center w-32 h-32 rounded-xl border-2 border-dashed border-[#B0A3F0] hover:border-[#9d8ee6] hover:bg-white/5 cursor-pointer transition-all"
+                        >
+                            <svg className="w-12 h-12 text-[#B0A3F0] mb-2" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 4v16m8-8H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <span className="text-white/70 text-xs">Upload Image</span>
+                        </button>
+                        <p className="text-white/50 text-xs text-center max-w-[180px]">
+                            Click to upload one or more images to apply on the model
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* background tool modal */}
+            {activeTool === 'background' && (
+                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
+                    <div className="flex flex-col items-center gap-3">
+                        <h3 className="text-white text-sm font-medium">Background Color</h3>
+                        <div className="w-[200px]">
+                            <HexColorPicker color={backgroundColor} onChange={(val) => setBackgroundColor(val)} />
+                            <div className="mt-3 grid grid-cols-6 gap-2">
+                                {['#212121', '#ffffff', '#1a1a2e', '#16213e', '#0f3460', '#533483', '#7209b7', '#f72585'].map(color => (
+                                    <button
+                                        key={color}
+                                        onClick={() => setBackgroundColor(color)}
+                                        className={`w-8 h-8 rounded-md border-2 transition-all ${backgroundColor === color ? 'border-[#B0A3F0] scale-110' : 'border-white/20'}`}
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                            <div className="mt-2 flex justify-between items-center">
+                                <div style={{ background: backgroundColor }} className="w-10 h-10 border rounded-md" />
+                                <span className="text-white/70 text-xs">{backgroundColor}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* rotation speed control modal */}
+            {autoRotate && (
+                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
+                    <div className="flex flex-col items-center gap-3">
+                        <h3 className="text-white text-sm font-medium">Rotation Speed</h3>
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setRotationSpeed(Math.max(0.5, rotationSpeed - 0.5))}
+                                className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                            >
+                                −
+                            </button>
+                            <div className="flex flex-col items-center gap-2">
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="10"
+                                    step="0.5"
+                                    value={rotationSpeed}
+                                    onChange={(e) => setRotationSpeed(parseFloat(e.target.value))}
+                                    className="w-32"
+                                />
+                                <span className="text-white/70 text-xs">{rotationSpeed.toFixed(1)}x</span>
+                            </div>
+                            <button
+                                onClick={() => setRotationSpeed(Math.min(10, rotationSpeed + 0.5))}
+                                className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                            >
+                                +
+                            </button>
                         </div>
                     </div>
                 </div>

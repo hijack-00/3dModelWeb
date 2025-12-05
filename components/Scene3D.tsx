@@ -27,6 +27,8 @@ interface Scene3DProps {
     stickers: StickerForScene[];
     backgroundColor?: string;
     onModelLoad?: () => void;
+    autoRotate?: boolean;
+    rotationSpeed?: number;
 }
 
 interface OriginalMaps {
@@ -237,7 +239,7 @@ function Model3D(props: {
     return <group ref={groupRef}>{model && <primitive object={model} />}</group>;
 }
 
-export default function Scene3D({ modelPath, modelColor, stickers, backgroundColor = '#212121', onModelLoad }: Scene3DProps) {
+export default function Scene3D({ modelPath, modelColor, stickers, backgroundColor = '#212121', onModelLoad, autoRotate = false, rotationSpeed = 2 }: Scene3DProps) {
     const [shadowFloor, setShadowFloor] = useState(0);
 
     return (
@@ -251,14 +253,17 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
                 <Model3D modelPath={modelPath} modelColor={modelColor} stickers={stickers} setShadowFloor={setShadowFloor} onModelLoad={onModelLoad} />
                 <Environment preset="studio" />
                 <ContactShadows position={[0, shadowFloor, 0]} scale={12} opacity={0.5} blur={2} far={15} />
-                <OrbitControls enablePan enableZoom enableRotate />
+                <OrbitControls
+                    enablePan
+                    enableZoom
+                    enableRotate
+                    autoRotate={autoRotate}
+                    autoRotateSpeed={rotationSpeed}
+                />
             </Canvas>
         </div>
     );
 }
-
-
-
 
 
 
