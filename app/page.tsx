@@ -22,7 +22,20 @@ export default function Home() {
                 fileName: 'female_cloth1.glb',
                 path: '/models/FemaleHoodie/female_cloth1.glb',
                 icon: '🧥'
+            },
+            {
+                name: 'Oversized Tshirt',
+                fileName: 'Tshirt_Oversized.glb',
+                path: '/models/Tshirt_Oversized.glb',
+                icon: '👔' // Pick an emoji
+            },
+            {
+                name: 'Oversized Tshirt 2',
+                fileName: 'oversized_t-shirt.glb',
+                path: '/models/oversized_t-shirt.glb',
+                icon: '👔' // Pick an emoji
             }
+
         ];
         setModels(availableModels);
     }, []);

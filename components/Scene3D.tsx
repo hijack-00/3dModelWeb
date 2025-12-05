@@ -24,6 +24,23 @@ const MODEL_CONFIG: Record<string, {
         yOffset: 5.5,
         zOffset: 0,
     },
+
+    "/models/Tshirt_Oversized.glb": {
+        targetSize: 3,        // Adjust to fit in view
+        groundOffset: 0,      // Adjust so it sits on ground
+        xOffset: 0,
+        yOffset: 0,
+        zOffset: 0,
+    },
+
+    "/models/oversized_t-shirt.glb": {
+        targetSize: 3,        // Adjust to fit in view
+        groundOffset: 0,      // Adjust so it sits on ground
+        xOffset: 0,
+        yOffset: 0,
+        zOffset: 0,
+    },
+
     default: {
         targetSize: 3,
         groundOffset: 0,
