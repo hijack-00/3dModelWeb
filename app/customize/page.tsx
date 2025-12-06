@@ -558,9 +558,10 @@ function CustomizeContent(): JSX.Element {
             className="relative h-screen w-screen overflow-hidden font-sans"
             onContextMenu={(e) => e.preventDefault()}
         >
-            <Link href="/" className="absolute top-5 left-5 z-50 px-4 py-2 bg-slate-800/90 text-white rounded-xl hover:bg-slate-700 transition-all flex items-center gap-2">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                Back to Gallery
+            <Link href="/" className="absolute top-3 left-3 md:top-5 md:left-5 z-50 px-3 py-2 md:px-4 md:py-2 bg-slate-800/90 text-white rounded-lg md:rounded-xl hover:bg-slate-700 transition-all flex items-center gap-1 md:gap-2 text-sm md:text-base">
+                <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <span className="hidden sm:inline">Back to Gallery</span>
+                <span className="sm:hidden">Back</span>
             </Link>
 
             {/* Hidden file input - always available for uploads */}
@@ -570,13 +571,14 @@ function CustomizeContent(): JSX.Element {
             {stickers.length > 0 && isFrameExpanded && (
                 <div
                     ref={frameRef}
-                    className="absolute bottom-[155px] left-1/2 -translate-x-1/2 w-[360px] h-[360px] border-2 border-dashed border-white/30 rounded-xl z-40 bg-black/10"
+                    className="absolute bottom-[140px] sm:bottom-[155px] left-1/2 -translate-x-1/2 w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] md:w-[360px] md:h-[360px] border-2 border-dashed border-white/30 rounded-xl z-40 bg-black/10"
                     onMouseDown={(e) => e.stopPropagation()}
                     onDoubleClick={() => setSelectedIndex(null)}
                     onClick={onFrameClick}
                 >
-                    <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-white text-xs z-30">
-                        Frame Editor — drag images, resize, rotate
+                    <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-white text-[10px] sm:text-xs z-30">
+                        <span className="hidden sm:inline">Frame Editor — drag images, resize, rotate</span>
+                        <span className="sm:hidden">Frame Editor</span>
                     </div>
 
                     {/* stickers */}
@@ -658,16 +660,16 @@ function CustomizeContent(): JSX.Element {
 
                     {/* Control Panel for Selected Sticker */}
                     {selectedIndex !== null && (
-                        <div className="absolute top-2 right-2 flex flex-col gap-1 z-50">
+                        <div className="absolute top-2 right-2 flex flex-col gap-0.5 sm:gap-1 z-50">
                             {/* Movement Controls - 3x3 Grid */}
-                            <div className="grid grid-cols-3 gap-0.5 mb-1">
+                            <div className="grid grid-cols-3 gap-0.5 mb-0.5 sm:mb-1">
                                 <div></div>
                                 <button
                                     title="Move Up"
                                     onClick={() => moveSticker('up')}
-                                    className="w-7 h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
+                                    className="w-6 h-6 sm:w-7 sm:h-7 bg-black/80 backdrop-blur-sm border border-white/30 rounded-md text-white cursor-pointer flex items-center justify-center transition-all hover:bg-black/90 hover:border-white/50"
                                 >
-                                    <svg className="w-2 h-2" viewBox="0 0 448 512" fill="currentColor">
+                                    <svg className="w-1.5 h-1.5 sm:w-2 sm:h-2" viewBox="0 0 448 512" fill="currentColor">
                                         <path d="M34.9 289.5l-22.2-22.2c-9.4-9.4-9.4-24.6 0-33.9L207 39c9.4-9.4 24.6-9.4 33.9 0l194.3 194.3c9.4 9.4 9.4 24.6 0 33.9L413 289.4c-9.5 9.5-25 9.3-34.3-.4L264 168.6V456c0 13.3-10.7 24-24 24h-32c-13.3 0-24-10.7-24-24V168.6L69.2 289.1c-9.3 9.8-24.8 10-34.3.4z" />
                                     </svg>
                                 </button>
@@ -761,16 +763,16 @@ function CustomizeContent(): JSX.Element {
                     )}
 
                     {/* thumbnails & upload */}
-                    <div className="absolute bottom-2 left-2 right-2 flex gap-2 p-2 rounded bg-black/60">
-                        <div onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center w-10 h-10 rounded border-2 border-dashed border-[#B0A3F0] cursor-pointer">
-                            <svg className="w-6 h-6 text-[#B0A3F0]" viewBox="0 0 24 24" fill="none"><path d="M12 4v16m8-8H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    <div className="absolute bottom-2 left-2 right-2 flex gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded bg-black/60">
+                        <div onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded border-2 border-dashed border-[#B0A3F0] cursor-pointer flex-shrink-0">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#B0A3F0]" viewBox="0 0 24 24" fill="none"><path d="M12 4v16m8-8H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </div>
 
-                        <div className="flex gap-2 overflow-x-auto flex-1">
+                        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto flex-1">
                             {stickers.map((s, idx) => {
                                 const isSelected = selectedIndex === idx;
                                 return (
-                                    <div key={s.id} className={`relative w-16 h-16 rounded overflow-hidden ${isSelected ? 'ring-2 ring-[#B0A3F0]' : 'border'}`}>
+                                    <div key={s.id} className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden flex-shrink-0 ${isSelected ? 'ring-2 ring-[#B0A3F0]' : 'border'}`}>
                                         <img
                                             ref={isSelected ? thumbnailRef : null}
                                             src={s.src}
@@ -826,27 +828,29 @@ function CustomizeContent(): JSX.Element {
             </div>
 
             {/* top-right actions */}
-            <div className="absolute top-5 right-5 flex gap-3 z-50">
-                <button title="Save project" onClick={handleSaveProject} className="p-3.5 bg-[#B0A3F0] text-white rounded-xl">
-                    Save
+            <div className="absolute top-3 right-3 md:top-5 md:right-5 flex gap-2 md:gap-3 z-50">
+                <button title="Save project" onClick={handleSaveProject} className="p-2 md:p-3.5 bg-[#B0A3F0] text-white rounded-lg md:rounded-xl text-sm md:text-base">
+                    <span className="hidden sm:inline">Save</span>
+                    <span className="sm:hidden">💾</span>
                 </button>
-                <button title="Screenshot" onClick={handleScreenshot} className="p-3.5 bg-[rgba(34,34,34,0.5)] text-white rounded-xl">
-                    Shot
+                <button title="Screenshot" onClick={handleScreenshot} className="p-2 md:p-3.5 bg-[rgba(34,34,34,0.5)] text-white rounded-lg md:rounded-xl text-sm md:text-base">
+                    <span className="hidden sm:inline">Shot</span>
+                    <span className="sm:hidden">📷</span>
                 </button>
             </div>
 
             {/* bottom toolbar */}
-            <div className="absolute bottom-0 left-0 right-0 bg-[#222222] backdrop-blur-[20px] p-5 flex justify-center items-center gap-2.5 overflow-x-auto z-20">
+            <div className="fixed bottom-0 left-0 right-0 bg-[#222222] backdrop-blur-[20px] p-3 sm:p-4 md:p-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4 md:pb-5 flex justify-start sm:justify-center items-center gap-2 sm:gap-2.5 overflow-x-auto z-[100] scrollbar-thin scrollbar-thumb-[#B0A3F0]/50 scrollbar-track-transparent shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">
                 {/* Frame toggle button - show when there are stickers */}
                 {stickers.length > 0 && (
                     <button
                         onClick={() => setIsFrameExpanded(!isFrameExpanded)}
-                        className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${isFrameExpanded ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                        className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${isFrameExpanded ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                             }`}
                     >
                         {isFrameExpanded ? (
                             // Collapse icon (down arrow)
-                            <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1" viewBox="0 0 24 24" fill="none">
                                 <path d="M19 9l-7 7-7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         ) : (
@@ -855,43 +859,43 @@ function CustomizeContent(): JSX.Element {
                                 <path d="M5 15l7-7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         )}
-                        <span className="text-xs">{isFrameExpanded ? 'Hide' : 'Frame'}</span>
+                        <span className="text-[10px] sm:text-xs">{isFrameExpanded ? 'Hide' : 'Frame'}</span>
                     </button>
                 )}
 
                 <button
                     onClick={() => setActiveTool(activeTool === 'color' ? null : 'color')}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${activeTool === 'color' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${activeTool === 'color' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
                         <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="text-xs">Color</span>
+                    <span className="text-[10px] sm:text-xs">Color</span>
                 </button>
 
                 <button
                     onClick={() => setActiveTool(activeTool === 'edit' ? null : 'edit')}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${activeTool === 'edit' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${activeTool === 'edit' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
                         <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="text-xs">Edit</span>
+                    <span className="text-[10px] sm:text-xs">Edit</span>
                 </button>
 
                 <button
                     onClick={() => setActiveTool(activeTool === 'background' ? null : 'background')}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[90px] transition-all ${activeTool === 'background' ? 'bg-[#B0A3F0] text-white' : 'bg-[#B0A3F0] text-white/90 hover:text-white'
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[70px] sm:min-w-[90px] transition-all flex-shrink-0 ${activeTool === 'background' ? 'bg-[#B0A3F0] text-white' : 'bg-[#B0A3F0] text-white/90 hover:text-white'
                         } shadow-[0_4px_15px_rgba(98,93,245,0.3)]`}
                 >
-                    <svg className="w-5 h-5 mb-2" viewBox="0 0 512 512" fill="currentColor">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mb-1 sm:mb-2" viewBox="0 0 512 512" fill="currentColor">
                         <path d="M204.3 5C104.9 24.4 24.8 104.3 5.2 203.4c-37 187 131.7 326.4 258.8 306.7 41.2-6.4 61.4-54.6 42.5-91.7-23.1-45.4 9.9-98.4 60.9-98.4h79.7c35.8 0 64.8-29.6 64.9-65.3C511.5 97.1 368.1-26.9 204.3 5zM96 320c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm32-128c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm128-64c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32zm128 64c-17.7 0-32-14.3-32-32s14.3-32 32-32 32 14.3 32 32-14.3 32-32 32z" />
                     </svg>
-                    <span className="text-xs">Background</span>
+                    <span className="text-[10px] sm:text-xs">Background</span>
                 </button>
 
 
@@ -900,33 +904,33 @@ function CustomizeContent(): JSX.Element {
                         setAutoRotate(!autoRotate);
                         setActiveTool(autoRotate ? null : 'rotate');
                     }}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${autoRotate ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${autoRotate ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
                         <path d="M21.888 13.5C21.164 18.311 17.013 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C16.1 2 19.625 4.219 21.33 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M22 4V8H18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="text-xs">{autoRotate ? 'Stop' : 'Rotate'}</span>
+                    <span className="text-[10px] sm:text-xs">{autoRotate ? 'Stop' : 'Rotate'}</span>
                 </button>
 
                 <button
                     onClick={() => setActiveTool(activeTool === 'hdr' ? null : 'hdr')}
-                    className={`flex flex-col items-center py-4 px-5 rounded-xl min-w-[70px] transition-all ${activeTool === 'hdr' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${activeTool === 'hdr' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
                         <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" />
                         <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
-                    <span className="text-xs">HDR</span>
+                    <span className="text-[10px] sm:text-xs">HDR</span>
                 </button>
             </div>
 
             {/* color picker modal */}
             {activeTool === 'color' && (
-                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 rounded z-40 border border-white/10">
-                    <div className="w-[200px]">
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 rounded-lg z-40 border border-white/10 max-w-[90vw]">
+                    <div className="w-[180px] sm:w-[200px]">
                         <HexColorPicker color={modelColor} onChange={(val) => setModelColor(val)} />
                         <div className="mt-2 flex gap-2">
                             <div style={{ background: modelColor }} className="w-8 h-8 border" />
@@ -938,14 +942,14 @@ function CustomizeContent(): JSX.Element {
 
             {/* edit tool modal */}
             {activeTool === 'edit' && (
-                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
-                    <div className="flex flex-col items-center gap-3">
-                        <h3 className="text-white text-sm font-medium">Add Images</h3>
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 sm:p-4 rounded-lg sm:rounded-xl z-40 border border-white/10 max-w-[90vw]">
+                    <div className="flex flex-col items-center gap-2 sm:gap-3">
+                        <h3 className="text-white text-xs sm:text-sm font-medium">Add Images</h3>
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex flex-col items-center justify-center w-32 h-32 rounded-xl border-2 border-dashed border-[#B0A3F0] hover:border-[#9d8ee6] hover:bg-white/5 cursor-pointer transition-all"
+                            className="flex flex-col items-center justify-center w-24 h-24 sm:w-32 sm:h-32 rounded-lg sm:rounded-xl border-2 border-dashed border-[#B0A3F0] hover:border-[#9d8ee6] hover:bg-white/5 cursor-pointer transition-all"
                         >
-                            <svg className="w-12 h-12 text-[#B0A3F0] mb-2" viewBox="0 0 24 24" fill="none">
+                            <svg className="w-10 h-10 sm:w-12 sm:h-12 text-[#B0A3F0] mb-1 sm:mb-2" viewBox="0 0 24 24" fill="none">
                                 <path d="M12 4v16m8-8H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                             <span className="text-white/70 text-xs">Upload Image</span>
@@ -959,10 +963,10 @@ function CustomizeContent(): JSX.Element {
 
             {/* background tool modal */}
             {activeTool === 'background' && (
-                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
-                    <div className="flex flex-col items-center gap-3">
-                        <h3 className="text-white text-sm font-medium">Background Color</h3>
-                        <div className="w-[200px]">
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 sm:p-4 rounded-lg sm:rounded-xl z-40 border border-white/10 max-w-[90vw]">
+                    <div className="flex flex-col items-center gap-2 sm:gap-3">
+                        <h3 className="text-white text-xs sm:text-sm font-medium">Background Color</h3>
+                        <div className="w-[180px] sm:w-[200px]">
                             <HexColorPicker color={backgroundColor} onChange={(val) => setBackgroundColor(val)} />
                             <div className="mt-3 grid grid-cols-6 gap-2">
                                 {['#212121', '#ffffff', '#1a1a2e', '#16213e', '#0f3460', '#533483', '#7209b7', '#f72585'].map(color => (
@@ -986,7 +990,7 @@ function CustomizeContent(): JSX.Element {
 
             {/* rotation speed control modal */}
             {autoRotate && (
-                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 rounded-xl z-40 border border-white/10">
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 sm:p-4 rounded-lg sm:rounded-xl z-40 border border-white/10 max-w-[90vw]">
                     <div className="flex flex-col items-center gap-3">
                         <h3 className="text-white text-sm font-medium">Rotation Speed</h3>
                         <div className="flex items-center gap-4">
@@ -1036,11 +1040,11 @@ function CustomizeContent(): JSX.Element {
 
             {/* HDR/Environment Library modal */}
             {activeTool === 'hdr' && (
-                <div className="absolute bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] backdrop-blur-[20px] p-5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 min-w-[320px] max-w-[92vw]">
-                    <div className="mb-3 text-white text-base font-bold text-center">Environment Library</div>
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] backdrop-blur-[20px] p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 min-w-[280px] sm:min-w-[320px] max-w-[92vw]">
+                    <div className="mb-2 sm:mb-3 text-white text-sm sm:text-base font-bold text-center">Environment Library</div>
 
                     {/* Environment grid */}
-                    <div className="grid grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto mb-3.5">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 max-h-[180px] sm:max-h-[220px] overflow-y-auto mb-2.5 sm:mb-3.5">
                         {/* None option */}
                         <button
                             title="None"
@@ -1050,7 +1054,7 @@ function CustomizeContent(): JSX.Element {
                                 : 'border border-white/15 bg-white/[0.04] hover:border-white/30'
                                 }`}
                         >
-                            <div className="h-[68px] flex items-center justify-center text-white text-xs">None</div>
+                            <div className="h-[50px] sm:h-[68px] flex items-center justify-center text-white text-[10px] sm:text-xs">None</div>
                         </button>
 
                         {/* Predefined environments */}
@@ -1069,7 +1073,7 @@ function CustomizeContent(): JSX.Element {
                                     : 'border border-white/15 bg-white/[0.04] hover:border-white/30'
                                     }`}
                             >
-                                <div className="w-full h-[68px] overflow-hidden">
+                                <div className="w-full h-[50px] sm:h-[68px] overflow-hidden">
                                     <img
                                         alt={env.name}
                                         crossOrigin="anonymous"
