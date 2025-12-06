@@ -107,6 +107,20 @@ function CustomizeContent(): JSX.Element {
         crop: { x: number; y: number; width: number; height: number };
     } | null>(null);
 
+    // Flutter WebView Detection & Helper
+    const isFlutterWebView = () => {
+        return typeof (window as any).DownloadHandler !== 'undefined';
+    };
+
+    const sendToFlutter = (blob: Blob, filename: string) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            (window as any).DownloadHandler.postMessage(`${filename}|${base64}`);
+        };
+        reader.readAsDataURL(blob);
+    };
+
     // add sticker helper
     const addStickerFromDataUrl = (dataUrl: string) => {
         const img = new Image();
@@ -576,12 +590,21 @@ function CustomizeContent(): JSX.Element {
             // Capture from WebGL canvas
             canvas.toBlob((blob: Blob | null) => {
                 if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `3d-model-${Date.now()}.png`;
-                link.click();
-                URL.revokeObjectURL(url);
+
+                const filename = `3d-model-${Date.now()}.png`;
+
+                if (isFlutterWebView()) {
+                    // Send to Flutter via JavaScript channel
+                    sendToFlutter(blob, filename);
+                } else {
+                    // Browser download
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
             }, 'image/png');
 
             setShowCameraMenu(false);
@@ -620,12 +643,20 @@ function CustomizeContent(): JSX.Element {
 
             mediaRecorder.onstop = () => {
                 const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `3d-model-recording-${Date.now()}.webm`;
-                link.click();
-                URL.revokeObjectURL(url);
+                const filename = `3d-model-recording-${Date.now()}.webm`;
+
+                if (isFlutterWebView()) {
+                    // Send to Flutter via JavaScript channel
+                    sendToFlutter(blob, filename);
+                } else {
+                    // Browser download
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
 
                 setRecordedChunks([]);
                 setIsRecording(false);
