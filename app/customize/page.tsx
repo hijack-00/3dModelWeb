@@ -75,6 +75,14 @@ function CustomizeContent(): JSX.Element {
     const [isFrameExpanded, setIsFrameExpanded] = useState(true);
     const [backgroundColor, setBackgroundColor] = useState('#212121');
     const [environmentBg, setEnvironmentBg] = useState<string | null>(null);
+
+    // Camera and Recording states
+    const [showCameraMenu, setShowCameraMenu] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const environmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -462,25 +470,6 @@ function CustomizeContent(): JSX.Element {
         aspectRatio: s.aspectRatio,
     }));
 
-    // screenshot
-    const handleScreenshot = () => {
-        const el = canvasRef.current;
-        if (!el) return;
-        const c = el.querySelector('canvas');
-        if (!c) return;
-        const link = document.createElement('a');
-        link.download = `3d-mockup-${Date.now()}.png`;
-        link.href = (c as HTMLCanvasElement).toDataURL('image/png');
-        link.click();
-    };
-
-    // save
-    const handleSaveProject = () => {
-        const projectData = { modelPath, modelColor, stickers, timestamp: Date.now() };
-        localStorage.setItem('3d-mockup-project', JSON.stringify(projectData));
-        alert('Project saved!');
-    };
-
     // click outside frame to deselect
     const onFrameClick = (e: React.MouseEvent) => {
         // Only deselect if clicking directly on the frame background (not on stickers or controls)
@@ -570,6 +559,108 @@ function CustomizeContent(): JSX.Element {
                 rotation: 0
             };
         }));
+    };
+
+    //  Camera Functions
+    const handleScreenshot = async () => {
+        if (!canvasRef.current) return;
+
+        try {
+            // Get the WebGL canvas directly
+            const canvas = canvasRef.current.querySelector('canvas');
+            if (!canvas) {
+                alert('Canvas not found');
+                return;
+            }
+
+            // Capture from WebGL canvas
+            canvas.toBlob((blob: Blob | null) => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `3d-model-${Date.now()}.png`;
+                link.click();
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+
+            setShowCameraMenu(false);
+        } catch (error) {
+            console.error('Screenshot failed:', error);
+            alert('Failed to take screenshot');
+        }
+    };
+
+    const startRecording = async () => {
+        if (!canvasRef.current) return;
+
+        try {
+            // Get the canvas stream
+            const canvas = canvasRef.current.querySelector('canvas');
+            if (!canvas) {
+                alert('Canvas not found');
+                return;
+            }
+
+            // @ts-ignore
+            const stream = canvas.captureStream(60); // 60 FPS
+
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 5000000, // 5 Mbps
+            });
+
+            const chunks: Blob[] = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `3d-model-recording-${Date.now()}.webm`;
+                link.click();
+                URL.revokeObjectURL(url);
+
+                setRecordedChunks([]);
+                setIsRecording(false);
+                setIsPaused(false);
+            };
+
+            mediaRecorderRef.current = mediaRecorder;
+            mediaRecorder.start(100); // Collect data every 100ms
+            setIsRecording(true);
+            setIsPaused(false);
+            setShowCameraMenu(false);
+        } catch (error) {
+            console.error('Recording failed:', error);
+            alert('Failed to start recording. Your browser may not support this feature.');
+        }
+    };
+
+    const pauseRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.pause();
+            setIsPaused(true);
+        }
+    };
+
+    const resumeRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+            mediaRecorderRef.current.resume();
+            setIsPaused(false);
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+        }
     };
 
     return (
@@ -852,15 +943,95 @@ function CustomizeContent(): JSX.Element {
 
             {/* top-right actions */}
             <div className="absolute top-3 right-3 md:top-5 md:right-5 flex gap-2 md:gap-3 z-50">
-                <button title="Save project" onClick={handleSaveProject} className="p-2 md:p-3.5 bg-[#B0A3F0] text-white rounded-lg md:rounded-xl text-sm md:text-base">
-                    <span className="hidden sm:inline">Save</span>
-                    <span className="sm:hidden">💾</span>
-                </button>
-                <button title="Screenshot" onClick={handleScreenshot} className="p-2 md:p-3.5 bg-[rgba(34,34,34,0.5)] text-white rounded-lg md:rounded-xl text-sm md:text-base">
-                    <span className="hidden sm:inline">Shot</span>
-                    <span className="sm:hidden">📷</span>
+                {/* Camera Button */}
+                <button
+                    title="Camera"
+                    onClick={() => setShowCameraMenu(!showCameraMenu)}
+                    className="p-2 md:p-3.5 bg-[#B0A3F0] text-white rounded-lg md:rounded-xl text-sm md:text-base relative"
+                >
+                    <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="none">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                 </button>
             </div>
+
+            {/* Camera Menu */}
+            {showCameraMenu && (
+                <div className="absolute top-16 right-3 md:top-20 md:right-5 bg-[#222222] rounded-lg shadow-2xl z-50 overflow-hidden border border-white/10">
+                    <button
+                        onClick={handleScreenshot}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition-colors w-full text-left"
+                    >
+                        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                        </svg>
+                        <div>
+                            <div className="text-white font-medium">Screenshot</div>
+                            <div className="text-white/60 text-xs">Capture current view</div>
+                        </div>
+                    </button>
+                    <div className="h-px bg-white/10"></div>
+                    <button
+                        onClick={startRecording}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition-colors w-full text-left"
+                    >
+                        <svg className="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="8" />
+                        </svg>
+                        <div>
+                            <div className="text-white font-medium">Record Video</div>
+                            <div className="text-white/60 text-xs">Start screen recording</div>
+                        </div>
+                    </button>
+                </div>
+            )}
+
+            {/* Recording Controls Overlay */}
+            {isRecording && (
+                <div className="absolute top-3 left-3 md:top-5 md:left-5 bg-black/80 backdrop-blur-sm px-4 py-3 rounded-lg z-50 flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-white font-medium">Recording</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                        {!isPaused ? (
+                            <button
+                                onClick={pauseRecording}
+                                className="p-2 bg-white/20 hover:bg-white/30 rounded transition-colors"
+                                title="Pause"
+                            >
+                                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                    <rect x="6" y="4" width="4" height="16" />
+                                    <rect x="14" y="4" width="4" height="16" />
+                                </svg>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={resumeRecording}
+                                className="p-2 bg-white/20 hover:bg-white/30 rounded transition-colors"
+                                title="Resume"
+                            >
+                                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                            </button>
+                        )}
+
+                        <button
+                            onClick={stopRecording}
+                            className="p-2 bg-red-500 hover:bg-red-600 rounded transition-colors"
+                            title="Stop & Download"
+                        >
+                            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* bottom toolbar */}
             <div className="fixed bottom-0 left-0 right-0 bg-[#222222] backdrop-blur-[20px] p-3 sm:p-4 md:p-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4 md:pb-5 flex justify-start sm:justify-center items-center gap-2 sm:gap-2.5 overflow-x-auto z-[100] scrollbar-thin scrollbar-thumb-[#B0A3F0]/50 scrollbar-track-transparent shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">

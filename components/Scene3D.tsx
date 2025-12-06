@@ -491,7 +491,10 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
                 </div>
             )}
 
-            <Canvas shadows>
+            <Canvas
+                shadows
+                gl={{ preserveDrawingBuffer: true }}
+            >
                 {!envTexture && <color attach="background" args={[backgroundColor]} />}
                 <PerspectiveCamera makeDefault position={[0, 0, 5]} />
                 <ambientLight intensity={0.5} />
