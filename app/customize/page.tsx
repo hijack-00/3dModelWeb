@@ -35,16 +35,32 @@ interface StickerForScene {
 
 const DEFAULT_FRAME_SIZE_PX = 360;
 
+type AnimationType = 'none' | 'pulse' | 'bounce' | 'shake' | 'swing' | 'spin';
+
 function genId() {
     return Math.random().toString(36).slice(2, 9);
 }
 
 function CustomizeContent(): JSX.Element {
     const searchParams = useSearchParams();
-    const modelParam = searchParams.get('model');
 
-    const [modelPath] = useState<string>(modelParam || '/models/FemaleHoodie/female_cloth1.glb');
+    // Support both old format (?model=path) and new format (?modelUrl=url&modelId=id&modelName=name&modelConfig=...)
+    const modelUrlParam = searchParams.get('modelUrl');
+    const modelParam = searchParams.get('model');
+    const modelIdParam = searchParams.get('modelId');
+    const modelNameParam = searchParams.get('modelName');
+    const modelConfigParam = searchParams.get('modelConfig');
+
+    // Parse modelConfig from URL if available
+    const parsedModelConfig = modelConfigParam ? JSON.parse(decodeURIComponent(modelConfigParam)) : null;
+
+    // Use modelUrl if available (from API), otherwise fallback to model (local path)
+    const [modelPath] = useState<string>(
+        modelUrlParam || modelParam || '/models/FemaleHoodie/female_cloth1.glb'
+    );
     const [modelColor, setModelColor] = useState<string>('original');
+    const [modelConfig] = useState<any>(parsedModelConfig);
+
 
     const [stickers, setStickers] = useState<Sticker[]>([]);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -53,6 +69,9 @@ function CustomizeContent(): JSX.Element {
     const [autoRotate, setAutoRotate] = useState(false);
     const [rotationSpeed, setRotationSpeed] = useState(2);
     const [rotateBackground, setRotateBackground] = useState(false);
+    const [animation, setAnimation] = useState<AnimationType>('none');
+    const [animationSpeed, setAnimationSpeed] = useState(2);
+    const [animateBackground, setAnimateBackground] = useState(false);
     const [isFrameExpanded, setIsFrameExpanded] = useState(true);
     const [backgroundColor, setBackgroundColor] = useState('#212121');
     const [environmentBg, setEnvironmentBg] = useState<string | null>(null);
@@ -823,6 +842,10 @@ function CustomizeContent(): JSX.Element {
                     rotateBackground={rotateBackground}
                     backgroundColor={backgroundColor}
                     environmentBg={environmentBg}
+                    animation={animation}
+                    animationSpeed={animationSpeed}
+                    animateBackground={animateBackground}
+                    modelConfig={modelConfig}
                     onModelLoad={() => { /* noop */ }}
                 />
             </div>
@@ -898,20 +921,15 @@ function CustomizeContent(): JSX.Element {
                     <span className="text-[10px] sm:text-xs">Background</span>
                 </button>
 
-
                 <button
-                    onClick={() => {
-                        setAutoRotate(!autoRotate);
-                        setActiveTool(autoRotate ? null : 'rotate');
-                    }}
-                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 ${autoRotate ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    onClick={() => setActiveTool(activeTool === 'view' ? null : 'view')}
+                    className={`flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[70px] sm:min-w-[90px] transition-all flex-shrink-0 ${animation !== 'none' ? 'bg-[#B0A3F0] text-white' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
-                    <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
-                        <path d="M21.888 13.5C21.164 18.311 17.013 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C16.1 2 19.625 4.219 21.33 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M22 4V8H18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6 mb-1" viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="text-[10px] sm:text-xs">{autoRotate ? 'Stop' : 'Rotate'}</span>
+                    <span className="text-[10px] sm:text-xs">Animation</span>
                 </button>
 
                 <button
@@ -988,52 +1006,159 @@ function CustomizeContent(): JSX.Element {
                 </div>
             )}
 
-            {/* rotation speed control modal */}
-            {autoRotate && (
-                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-3 sm:p-4 rounded-lg sm:rounded-xl z-40 border border-white/10 max-w-[90vw]">
-                    <div className="flex flex-col items-center gap-3">
-                        <h3 className="text-white text-sm font-medium">Rotation Speed</h3>
-                        <div className="flex items-center gap-4">
+
+
+            {/* Animation modal */}
+            {activeTool === 'view' && (
+                <div className="absolute bottom-[100px] sm:bottom-[120px] md:bottom-[155px] left-1/2 -translate-x-1/2 bg-[#222222] p-4 sm:p-5 rounded-lg sm:rounded-xl z-40 border border-white/10 max-w-[90vw]">
+                    <div className="flex flex-col items-center gap-3 sm:gap-4">
+                        <h3 className="text-white text-sm sm:text-base font-medium">Model Animations</h3>
+
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {/* None */}
                             <button
-                                onClick={() => setRotationSpeed(Math.max(0.5, rotationSpeed - 0.5))}
-                                className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                                onClick={() => setAnimation('none')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'none'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
                             >
-                                −
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M4.93 4.93l14.14 14.14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                <span className="text-xs">None</span>
                             </button>
-                            <div className="flex flex-col items-center gap-2">
-                                <input
-                                    type="range"
-                                    min="0.5"
-                                    max="10"
-                                    step="0.5"
-                                    value={rotationSpeed}
-                                    onChange={(e) => setRotationSpeed(parseFloat(e.target.value))}
-                                    className="w-32"
-                                />
-                                <span className="text-white/70 text-xs">{rotationSpeed.toFixed(1)}x</span>
-                            </div>
+
+                            {/* Pulse */}
                             <button
-                                onClick={() => setRotationSpeed(Math.min(10, rotationSpeed + 0.5))}
-                                className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                                onClick={() => setAnimation('pulse')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'pulse'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
                             >
-                                +
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                                    <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" opacity="0.5" />
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+                                </svg>
+                                <span className="text-xs">Pulse</span>
+                            </button>
+
+                            {/* Bounce */}
+                            <button
+                                onClick={() => setAnimation('bounce')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'bounce'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
+                            >
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="18" r="3" fill="currentColor" />
+                                    <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5" />
+                                    <circle cx="12" cy="7" r="1.5" fill="currentColor" opacity="0.3" />
+                                </svg>
+                                <span className="text-xs">Bounce</span>
+                            </button>
+
+                            {/* Shake */}
+                            <button
+                                onClick={() => setAnimation('shake')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'shake'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
+                            >
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <path d="M8 12h8M6 8h12M6 16h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                <span className="text-xs">Shake</span>
+                            </button>
+
+                            {/* Swing */}
+                            <button
+                                onClick={() => setAnimation('swing')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'swing'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
+                            >
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2v6M12 16v6M5.64 5.64l4.24 4.24M14.12 14.12l4.24 4.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                <span className="text-xs">Swing</span>
+                            </button>
+
+                            {/* Spin */}
+                            <button
+                                onClick={() => setAnimation('spin')}
+                                className={`flex flex-col items-center p-3 sm:p-4 rounded-lg transition-all ${animation === 'spin'
+                                    ? 'bg-[#B0A3F0] text-white border-2 border-[#B0A3F0]'
+                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border-2 border-transparent'
+                                    }`}
+                            >
+                                <svg className="w-8 h-8 mb-1" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                                </svg>
+                                <span className="text-xs">Spin</span>
                             </button>
                         </div>
 
-                        {/* Rotate Background Checkbox */}
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    checked={rotateBackground}
-                                    onChange={(e) => setRotateBackground(e.target.checked)}
-                                    className="w-4 h-4 rounded border-white/30 bg-white/10 text-[#B0A3F0] focus:ring-2 focus:ring-[#B0A3F0] focus:ring-offset-0 cursor-pointer"
-                                />
-                                <span className="text-white/80 text-sm group-hover:text-white transition-colors">
-                                    Rotate Background
-                                </span>
-                            </label>
-                        </div>
+                        {/* Animation Speed and Background Controls - Show only when animation is active */}
+                        {animation !== 'none' && (
+                            <>
+                                {/* Divider */}
+                                <div className="h-px bg-white/10 w-full my-1"></div>
+
+                                {/* Animation Speed Control */}
+                                <div className="flex flex-col items-center gap-3 w-full">
+                                    <h4 className="text-white text-sm font-medium">Animation Speed</h4>
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={() => setAnimationSpeed(Math.max(0.5, animationSpeed - 0.5))}
+                                            className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                                        >
+                                            −
+                                        </button>
+                                        <div className="flex flex-col items-center gap-2">
+                                            <input
+                                                type="range"
+                                                min="0.5"
+                                                max="10"
+                                                step="0.5"
+                                                value={animationSpeed}
+                                                onChange={(e) => setAnimationSpeed(parseFloat(e.target.value))}
+                                                className="w-32"
+                                            />
+                                            <span className="text-white/70 text-xs">{animationSpeed.toFixed(1)}x</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setAnimationSpeed(Math.min(10, animationSpeed + 0.5))}
+                                            className="w-8 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center transition-all"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+
+                                    {/* Animate Background Checkbox */}
+                                    <div className="mt-2 pt-2 border-t border-white/10 w-full">
+                                        <label className="flex items-center gap-2 cursor-pointer group justify-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={animateBackground}
+                                                onChange={(e) => setAnimateBackground(e.target.checked)}
+                                                className="w-4 h-4 rounded border-white/30 bg-white/10 text-[#B0A3F0] focus:ring-2 focus:ring-[#B0A3F0] focus:ring-offset-0 cursor-pointer"
+                                            />
+                                            <span className="text-white/80 text-sm group-hover:text-white transition-colors">
+                                                Animate Background
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
