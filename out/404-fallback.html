@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <script>
+        // Get the current path
+        const path = window.location.pathname;
+        
+        // Check if we're on a 404 page and path is not root
+        if (path !== '/' && !path.includes('.')) {
+            // Try to load the HTML file
+            const htmlPath = path.endsWith('/') ? path + 'index.html' : path + '.html';
+            
+            // Attempt to fetch the HTML file
+            fetch(htmlPath)
+                .then(response => {
+                    if (response.ok) {
+                        window.location.replace(htmlPath);
+                    } else {
+                        // Fallback to index with hash routing
+                        window.location.replace('/' + '#' + path);
+                    }
+                })
+                .catch(() => {
+                    // Fallback to root
+                    window.location.replace('/');
+                });
+        }
+    </script>
+</head>
+<body>
+    <p>Redirecting...</p>
+</body>
+</html>
