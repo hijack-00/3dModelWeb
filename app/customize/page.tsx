@@ -577,11 +577,11 @@ function CustomizeContent(): JSX.Element {
             className="relative h-screen w-screen overflow-hidden font-sans"
             onContextMenu={(e) => e.preventDefault()}
         >
-            <Link href="/" className="absolute top-3 left-3 md:top-5 md:left-5 z-50 px-3 py-2 md:px-4 md:py-2 bg-slate-800/90 text-white rounded-lg md:rounded-xl hover:bg-slate-700 transition-all flex items-center gap-1 md:gap-2 text-sm md:text-base">
+            {/* <Link href="/" className="absolute top-3 left-3 md:top-5 md:left-5 z-50 px-3 py-2 md:px-4 md:py-2 bg-slate-800/90 text-white rounded-lg md:rounded-xl hover:bg-slate-700 transition-all flex items-center gap-1 md:gap-2 text-sm md:text-base">
                 <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 <span className="hidden sm:inline">Back to Gallery</span>
                 <span className="sm:hidden">Back</span>
-            </Link>
+            </Link> */}
 
             {/* Hidden file input - always available for uploads */}
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />

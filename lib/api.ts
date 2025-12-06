@@ -1,6 +1,7 @@
 // API Configuration
-// Using local Next.js API route as a proxy to avoid CORS issues
-const API_BASE_URL = '/api';
+// In production (static export), call backend directly
+// In development, you can use /api proxy or direct backend call
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://threedmockupbackend.onrender.com/api';
 
 // Types matching the API response
 export interface APICategory {
