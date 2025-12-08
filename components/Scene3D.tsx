@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, ContactShadows, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { getDeviceProfile, getQualitySettings, disposeThreeObject, type QualitySettings } from '@/lib/deviceUtils';
 
 const MODEL_CONFIG: Record<string, { targetSize: number; groundOffset?: number; xOffset?: number; yOffset?: number; zOffset?: number; }> = {
     '/models/FemaleHoodie/female_cloth1.glb': { targetSize: 2.5, groundOffset: -6, xOffset: 0, yOffset: 5.5, zOffset: 0 },
@@ -118,11 +119,13 @@ function Model3D(props: {
     animation?: AnimationType;
     animationSpeed?: number;
     modelConfig?: ModelConfig;
+    qualitySettings: QualitySettings;
 }) {
-    const { modelPath, modelColor, stickers, setShadowFloor, onModelLoad, onProgress, animation = 'none', animationSpeed = 2, modelConfig } = props;
+    const { modelPath, modelColor, stickers, setShadowFloor, onModelLoad, onProgress, animation = 'none', animationSpeed = 2, modelConfig, qualitySettings } = props;
     const groupRef = useRef<THREE.Group | null>(null);
     const [model, setModel] = useState<THREE.Object3D | null>(null);
     const originalMaps = useRef<Map<THREE.Mesh, OriginalMaps>>(new Map());
+    const textureCache = useRef<Map<string, THREE.CanvasTexture>>(new Map());
 
     // Animation frame
     useFrame((state) => {
@@ -252,8 +255,14 @@ function Model3D(props: {
             if (!stored) return;
 
             const baseImage = stored.map?.image;
-            const texWidth = (baseImage && baseImage.width) ? baseImage.width : 2048;
-            const texHeight = (baseImage && baseImage.height) ? baseImage.height : texWidth;
+            // Use adaptive texture size based on device capabilities
+            const maxTexSize = qualitySettings.textureSize;
+            const originalWidth = (baseImage && baseImage.width) ? baseImage.width : maxTexSize;
+            const originalHeight = (baseImage && baseImage.height) ? baseImage.height : maxTexSize;
+
+            // Clamp to device's max texture size
+            const texWidth = Math.min(originalWidth, maxTexSize);
+            const texHeight = Math.min(originalHeight, maxTexSize);
 
             const canvas = document.createElement('canvas');
             canvas.width = texWidth;
@@ -324,6 +333,13 @@ function Model3D(props: {
                     if (stickers[i]) await drawSticker(stickers[i]);
                 }
 
+                // Dispose old texture from cache if exists
+                const cacheKey = `${child.uuid}-${modelColor}-${stickers.length}`;
+                const oldTexture = textureCache.current.get(cacheKey);
+                if (oldTexture) {
+                    oldTexture.dispose();
+                }
+
                 const composite = new THREE.CanvasTexture(canvas);
                 // set color space if supported
                 try {
@@ -332,6 +348,9 @@ function Model3D(props: {
                 } catch { /* ignore */ }
                 composite.flipY = false;
                 composite.needsUpdate = true;
+
+                // Cache the texture
+                textureCache.current.set(cacheKey, composite);
 
                 child.material.map = composite;
                 child.material.normalMap = stored.normalMap;
@@ -380,7 +399,7 @@ function Model3D(props: {
 }
 
 // Component to render and optionally rotate the background
-function RotatingBackground({ texture, rotationSpeed, shouldRotate, autoRotate }: { texture: THREE.Texture; rotationSpeed: number; shouldRotate: boolean; autoRotate: boolean }) {
+function RotatingBackground({ texture, rotationSpeed, shouldRotate, autoRotate, segments }: { texture: THREE.Texture; rotationSpeed: number; shouldRotate: boolean; autoRotate: boolean; segments: number }) {
     const meshRef = useRef<THREE.Mesh>(null);
 
     // Use useFrame for smooth animation tied to Three.js render loop
@@ -404,7 +423,7 @@ function RotatingBackground({ texture, rotationSpeed, shouldRotate, autoRotate }
 
     return (
         <mesh ref={meshRef} scale={[-1, 1, 1]}>
-            <sphereGeometry args={[500, 60, 40]} />
+            <sphereGeometry args={[500, segments, Math.floor(segments * 0.66)]} />
             <meshBasicMaterial map={texture} side={THREE.BackSide} />
         </mesh>
     );
@@ -415,6 +434,13 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
     const [envTexture, setEnvTexture] = useState<THREE.Texture | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadingProgress, setLoadingProgress] = useState(0);
+
+    // Detect device capabilities and get quality settings
+    const qualitySettings = useMemo(() => {
+        const profile = getDeviceProfile();
+        console.log('Device profile detected:', profile);
+        return getQualitySettings(profile);
+    }, []);
 
     // Load environment texture when environmentBg changes
     useEffect(() => {
@@ -492,13 +518,19 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
             )}
 
             <Canvas
-                shadows
-                gl={{ preserveDrawingBuffer: true }}
+                shadows={qualitySettings.shadowsEnabled}
+                gl={{
+                    preserveDrawingBuffer: true,
+                    antialias: qualitySettings.antialias,
+                    powerPreference: 'high-performance',
+                }}
+                dpr={qualitySettings.pixelRatio}
             >
                 {!envTexture && <color attach="background" args={[backgroundColor]} />}
                 <PerspectiveCamera makeDefault position={[0, 0, 5]} />
-                <ambientLight intensity={0.5} />
-                <spotLight position={[10, 10, 10]} intensity={1} castShadow />
+                <ambientLight intensity={qualitySettings.ambientLightIntensity} />
+                {qualitySettings.shadowsEnabled && <spotLight position={[10, 10, 10]} intensity={qualitySettings.spotLightIntensity} castShadow />}
+                {!qualitySettings.shadowsEnabled && <directionalLight position={[10, 10, 10]} intensity={qualitySettings.spotLightIntensity} />}
                 <pointLight position={[-10, -10, -10]} intensity={0.5} />
 
                 {/* Render background sphere if environment texture exists */}
@@ -508,6 +540,7 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
                         rotationSpeed={animation !== 'none' ? animationSpeed : rotationSpeed}
                         shouldRotate={animation !== 'none' ? animateBackground : rotateBackground}
                         autoRotate={animation !== 'none' || autoRotate}
+                        segments={qualitySettings.backgroundSegments}
                     />
                 )}
 
@@ -521,9 +554,12 @@ export default function Scene3D({ modelPath, modelColor, stickers, backgroundCol
                     animation={animation}
                     animationSpeed={animationSpeed}
                     modelConfig={modelConfig}
+                    qualitySettings={qualitySettings}
                 />
                 <Environment preset="studio" />
-                <ContactShadows position={[0, shadowFloor, 0]} scale={12} opacity={0.5} blur={2} far={15} />
+                {qualitySettings.shadowsEnabled && qualitySettings.contactShadowOpacity > 0 && (
+                    <ContactShadows position={[0, shadowFloor, 0]} scale={12} opacity={qualitySettings.contactShadowOpacity} blur={2} far={15} />
+                )}
                 <OrbitControls
                     enablePan
                     enableZoom

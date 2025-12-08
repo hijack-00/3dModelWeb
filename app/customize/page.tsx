@@ -1,18 +1,21 @@
 'use client';
 
-import React, { useEffect, useRef, useState, Suspense } from 'react';
+import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { HexColorPicker } from 'react-colorful';
 import Link from 'next/link';
+import { getDeviceProfile, getQualitySettings, compressImage } from '@/lib/deviceUtils';
+import { applyColorGrading, ColorGradingParams, DEFAULT_COLOR_GRADING, COLOR_GRADING_PRESETS } from '@/lib/colorGradingUtils';
 
 const Scene3D = dynamic(() => import('@/components/Scene3D'), { ssr: false });
 
-type ToolType = 'color' | 'edit' | 'background' | 'rotate' | 'hdr' | 'view' | 'decal' | null;
+type ToolType = 'color' | 'edit' | 'background' | 'rotate' | 'hdr' | 'view' | 'decal' | 'colorGrading' | null;
 
 interface Sticker {
     id: string;
     src: string;
+    originalSrc?: string;
     uvX: number; // 0..1
     uvY: number; // 0..1 (1 = top)
     scale: number; // 0.05..0.5
@@ -22,6 +25,7 @@ interface Sticker {
     aspectRatio: number; // w/h
     zIndex: number;
     crop?: { x: number; y: number; width: number; height: number }; // percents
+    colorGrading?: Partial<ColorGradingParams>;
 }
 
 interface StickerForScene {
@@ -107,6 +111,12 @@ function CustomizeContent(): JSX.Element {
         crop: { x: number; y: number; width: number; height: number };
     } | null>(null);
 
+    // Device quality settings
+    const qualitySettings = useMemo(() => {
+        const profile = getDeviceProfile();
+        return getQualitySettings(profile);
+    }, []);
+
     // Flutter WebView Detection & Helper
     const isFlutterWebView = () => {
         return typeof (window as any).DownloadHandler !== 'undefined';
@@ -130,6 +140,7 @@ function CustomizeContent(): JSX.Element {
             const newSticker: Sticker = {
                 id: genId(),
                 src: dataUrl,
+                originalSrc: dataUrl,
                 uvX: 0.5,
                 uvY: 0.5,
                 scale: 0.15,
@@ -139,6 +150,7 @@ function CustomizeContent(): JSX.Element {
                 aspectRatio: aspect,
                 zIndex: stickers.length,
                 crop: { x: 0, y: 0, width: 100, height: 100 },
+                colorGrading: { ...DEFAULT_COLOR_GRADING },
             };
             setStickers(prev => {
                 const next = [...prev, newSticker];
@@ -156,6 +168,12 @@ function CustomizeContent(): JSX.Element {
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files) return;
+
+        // Close edit modal after upload
+        setActiveTool(null);
+        // Open canvas frame to show uploaded images
+        setIsFrameExpanded(true);
+
         Array.from(files).forEach(file => {
             const reader = new FileReader();
             reader.onload = evt => {
@@ -180,6 +198,50 @@ function CustomizeContent(): JSX.Element {
         };
         reader.readAsDataURL(file);
         e.target.value = ''; // Reset input
+    };
+
+    // Color Grading Functions
+    const updateColorGrading = async (paramName: keyof ColorGradingParams, value: number) => {
+        if (selectedIndex === null) return;
+        const sticker = stickers[selectedIndex];
+        if (!sticker || !sticker.originalSrc) return;
+        const newGrading = { ...sticker.colorGrading, [paramName]: value };
+        try {
+            const gradedImage = await applyColorGrading(sticker.originalSrc, newGrading);
+            setStickers(prev => prev.map((s, i) =>
+                i === selectedIndex ? { ...s, src: gradedImage, colorGrading: newGrading } : s
+            ));
+        } catch (error) {
+            console.error('Failed to apply color grading:', error);
+        }
+    };
+
+    const applyColorGradingPreset = async (presetName: keyof typeof COLOR_GRADING_PRESETS) => {
+        if (selectedIndex === null) return;
+        const sticker = stickers[selectedIndex];
+        if (!sticker || !sticker.originalSrc) return;
+        const preset = COLOR_GRADING_PRESETS[presetName];
+        try {
+            const gradedImage = await applyColorGrading(sticker.originalSrc, preset);
+            setStickers(prev => prev.map((s, i) =>
+                i === selectedIndex ? { ...s, src: gradedImage, colorGrading: preset } : s
+            ));
+        } catch (error) {
+            console.error('Failed to apply preset:', error);
+        }
+    };
+
+    const resetColorGrading = () => {
+        if (selectedIndex === null) return;
+        const sticker = stickers[selectedIndex];
+        if (!sticker || !sticker.originalSrc) return;
+        setStickers(prev => prev.map((s, i) =>
+            i === selectedIndex ? {
+                ...s,
+                src: s.originalSrc || s.src,
+                colorGrading: { ...DEFAULT_COLOR_GRADING }
+            } : s
+        ));
     };
 
     // Helper to get coordinates from mouse or touch events
@@ -949,6 +1011,179 @@ function CustomizeContent(): JSX.Element {
                                 );
                             })}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Adjust button - positioned outside left of frame, toolbar-styled */}
+            {stickers.length > 0 && selectedIndex !== null && isFrameExpanded && (
+                <button
+                    onClick={() => setActiveTool(activeTool === 'colorGrading' ? null : 'colorGrading')}
+                    className={`absolute bottom-[140px] sm:bottom-[155px] translate-x-0 left-[calc(50%-200px)] sm:left-[calc(50%-220px)] md:left-[calc(50%-250px)] flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 z-40 ${activeTool === 'colorGrading'
+                            ? 'bg-[#B0A3F0] text-white'
+                            : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                        }`}
+                >
+                    <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                        <path d="M12 2 A 10 10 0 0 1 12 22" stroke="currentColor" strokeWidth="2" opacity="0.3" fill="currentColor" />
+                        <path d="M8 12 L 12 8 L 16 12 L 12 16 Z" fill="currentColor" opacity="0.7" />
+                    </svg>
+                    <span className="text-[10px] sm:text-xs">Adjust</span>
+                </button>
+            )}
+
+            {/* Color Grading Panel - positioned above Adjust button on left side */}
+            {activeTool === 'colorGrading' && selectedIndex !== null && stickers[selectedIndex] && (
+                <div className="absolute bottom-[220px] sm:bottom-[240px] left-[calc(50%-200px)] sm:left-[calc(50%-220px)] md:left-[calc(50%-250px)] bg-[#222222] p-4 rounded-lg sm:rounded-xl z-50 border border-white/10 w-[280px] sm:w-[320px] max-h-[calc(100vh-320px)] overflow-y-auto shadow-2xl"
+                    style={{ scrollbarWidth: 'thin' }}
+                >
+                    <div className="flex flex-col gap-3 w-full">
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-white text-sm font-medium">Adjustments</h3>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={resetColorGrading}
+                                    className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded text-xs transition-all"
+                                >
+                                    Reset
+                                </button>
+                                <button
+                                    onClick={() => setActiveTool(null)}
+                                    className="w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded transition-all"
+                                    title="Close"
+                                >
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none">
+                                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Presets */}
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-white/50 text-xs">Quick Presets</span>
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {Object.keys(COLOR_GRADING_PRESETS).slice(0, 9).map((presetName) => (
+                                    <button
+                                        key={presetName}
+                                        onClick={() => applyColorGradingPreset(presetName as keyof typeof COLOR_GRADING_PRESETS)}
+                                        className="px-2 py-1.5 bg-white/5 hover:bg-[#B0A3F0] text-white/70 hover:text-white rounded text-[10px] transition-all capitalize"
+                                    >
+                                        {presetName.replace(/([A-Z])/g, ' $1').trim()}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Manual Adjustments */}
+                        <div className="flex flex-col gap-2">
+                            {/* Brightness */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Brightness</label>
+                                    <span className="text-white/50 text-xs">{stickers[selectedIndex].colorGrading?.brightness || 0}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-100"
+                                    max="100"
+                                    step="1"
+                                    value={stickers[selectedIndex].colorGrading?.brightness || 0}
+                                    onChange={(e) => updateColorGrading('brightness', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+
+                            {/* Exposure */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Exposure</label>
+                                    <span className="text-white/50 text-xs">{(stickers[selectedIndex].colorGrading?.exposure || 0).toFixed(2)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-2"
+                                    max="2"
+                                    step="0.1"
+                                    value={stickers[selectedIndex].colorGrading?.exposure || 0}
+                                    onChange={(e) => updateColorGrading('exposure', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+
+                            {/* Contrast */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Contrast</label>
+                                    <span className="text-white/50 text-xs">{stickers[selectedIndex].colorGrading?.contrast || 0}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-100"
+                                    max="100"
+                                    step="1"
+                                    value={stickers[selectedIndex].colorGrading?.contrast || 0}
+                                    onChange={(e) => updateColorGrading('contrast', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+
+                            {/* Saturation */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Saturation</label>
+                                    <span className="text-white/50 text-xs">{stickers[selectedIndex].colorGrading?.saturation || 0}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-100"
+                                    max="100"
+                                    step="1"
+                                    value={stickers[selectedIndex].colorGrading?.saturation || 0}
+                                    onChange={(e) => updateColorGrading('saturation', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+
+                            {/* Hue */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Hue</label>
+                                    <span className="text-white/50 text-xs">{stickers[selectedIndex].colorGrading?.hue || 0}°</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-180"
+                                    max="180"
+                                    step="1"
+                                    value={stickers[selectedIndex].colorGrading?.hue || 0}
+                                    onChange={(e) => updateColorGrading('hue', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+
+                            {/* Temperature */}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-white/70 text-xs">Temperature</label>
+                                    <span className="text-white/50 text-xs">{stickers[selectedIndex].colorGrading?.temperature || 0}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="-100"
+                                    max="100"
+                                    step="1"
+                                    value={stickers[selectedIndex].colorGrading?.temperature || 0}
+                                    onChange={(e) => updateColorGrading('temperature', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-purple"
+                                />
+                            </div>
+                        </div>
+
+                        <p className="text-white/40 text-[10px] text-center mt-1">
+                            Adjustments apply to selected image
+                        </p>
                     </div>
                 </div>
             )}
