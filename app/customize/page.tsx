@@ -85,7 +85,9 @@ function CustomizeContent(): JSX.Element {
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+    const [recordingTime, setRecordingTime] = useState(0); // in seconds
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -242,6 +244,36 @@ function CustomizeContent(): JSX.Element {
                 colorGrading: { ...DEFAULT_COLOR_GRADING }
             } : s
         ));
+    };
+
+    // Recording timer effect
+    useEffect(() => {
+        if (isRecording && !isPaused) {
+            // Start timer
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+        } else {
+            // Clear timer when paused or stopped
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+        }
+
+        // Cleanup on unmount
+        return () => {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+            }
+        };
+    }, [isRecording, isPaused]);
+
+    // Helper to format recording time as MM:SS
+    const formatRecordingTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     };
 
     // Helper to get coordinates from mouse or touch events
@@ -723,12 +755,14 @@ function CustomizeContent(): JSX.Element {
                 setRecordedChunks([]);
                 setIsRecording(false);
                 setIsPaused(false);
+                setRecordingTime(0); // Reset timer
             };
 
             mediaRecorderRef.current = mediaRecorder;
             mediaRecorder.start(100); // Collect data every 100ms
             setIsRecording(true);
             setIsPaused(false);
+            setRecordingTime(0); // Reset timer
             setShowCameraMenu(false);
         } catch (error) {
             console.error('Recording failed:', error);
@@ -1015,13 +1049,13 @@ function CustomizeContent(): JSX.Element {
                 </div>
             )}
 
-            {/* Adjust button - positioned outside left of frame, toolbar-styled */}
+            {/* Adjust button - positioned just left of canvas frame */}
             {stickers.length > 0 && selectedIndex !== null && isFrameExpanded && (
                 <button
                     onClick={() => setActiveTool(activeTool === 'colorGrading' ? null : 'colorGrading')}
-                    className={`absolute bottom-[140px] sm:bottom-[155px] translate-x-0 left-[calc(50%-200px)] sm:left-[calc(50%-220px)] md:left-[calc(50%-250px)] flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 z-40 ${activeTool === 'colorGrading'
-                            ? 'bg-[#B0A3F0] text-white'
-                            : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    className={`absolute bottom-[140px] sm:bottom-[155px] left-4 sm:left-[calc(50%-230px)] md:left-[calc(50%-250px)] lg:left-[calc(50%-270px)] flex flex-col items-center py-3 px-3.5 sm:py-4 sm:px-5 rounded-lg sm:rounded-xl min-w-[60px] sm:min-w-[70px] transition-all flex-shrink-0 z-40 ${activeTool === 'colorGrading'
+                        ? 'bg-[#B0A3F0] text-white'
+                        : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                         }`}
                 >
                     <svg className="w-6 h-6 mb-1" viewBox="0 0 24 24" fill="none">
@@ -1033,9 +1067,9 @@ function CustomizeContent(): JSX.Element {
                 </button>
             )}
 
-            {/* Color Grading Panel - positioned above Adjust button on left side */}
+            {/* Color Grading Panel - positioned just left of canvas frame */}
             {activeTool === 'colorGrading' && selectedIndex !== null && stickers[selectedIndex] && (
-                <div className="absolute bottom-[220px] sm:bottom-[240px] left-[calc(50%-200px)] sm:left-[calc(50%-220px)] md:left-[calc(50%-250px)] bg-[#222222] p-4 rounded-lg sm:rounded-xl z-50 border border-white/10 w-[280px] sm:w-[320px] max-h-[calc(100vh-320px)] overflow-y-auto shadow-2xl"
+                <div className="absolute bottom-[100px] left-1/2 -translate-x-1/2 sm:bottom-[220px] sm:left-[calc(50%-230px)] sm:translate-x-0 md:left-[calc(50%-250px)] lg:left-[calc(50%-270px)] md:bottom-[240px] bg-[#222222] p-3 sm:p-4 rounded-lg sm:rounded-xl z-50 border border-white/10 w-[min(340px,90vw)] sm:w-[300px] md:w-[320px] max-h-[calc(100vh-180px)] sm:max-h-[calc(100vh-320px)] overflow-y-auto shadow-2xl"
                     style={{ scrollbarWidth: 'thin' }}
                 >
                     <div className="flex flex-col gap-3 w-full">
@@ -1258,8 +1292,17 @@ function CustomizeContent(): JSX.Element {
             {isRecording && (
                 <div className="absolute top-3 left-3 md:top-5 md:left-5 bg-black/80 backdrop-blur-sm px-4 py-3 rounded-lg z-50 flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                        <span className="text-white font-medium">Recording</span>
+                        <div className={`w-3 h-3 bg-red-500 rounded-full ${!isPaused ? 'animate-pulse' : ''}`}></div>
+                        <span className="text-white font-medium">{isPaused ? 'Paused' : 'Recording'}</span>
+                    </div>
+
+                    {/* Timer Display */}
+                    <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded">
+                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span className="text-white font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
                     </div>
 
                     <div className="flex gap-2">

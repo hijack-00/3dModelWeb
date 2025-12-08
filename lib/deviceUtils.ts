@@ -21,6 +21,11 @@ export interface QualitySettings {
  * Detect device capabilities and return a quality profile
  */
 export function getDeviceProfile(): DeviceProfile {
+    // SSR Safety: Return default profile if not in browser
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+        return 'medium'; // Default for server-side rendering
+    }
+
     // Check if mobile
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         navigator.userAgent
@@ -30,22 +35,29 @@ export function getDeviceProfile(): DeviceProfile {
     const memory = (navigator as any).deviceMemory || 4;
 
     // Check GPU tier (basic heuristic)
-    const canvas = document.createElement('canvas');
-    const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
-
     let gpuTier: 'low' | 'medium' | 'high' = 'medium';
 
-    if (gl) {
-        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-        if (debugInfo) {
-            const renderer = (gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string).toLowerCase();
+    // Only access document in browser environment
+    if (typeof document !== 'undefined') {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
 
-            // Simple GPU detection - expand as needed
-            if (renderer.includes('mali') || renderer.includes('adreno 3') || renderer.includes('adreno 4')) {
-                gpuTier = 'low';
-            } else if (renderer.includes('adreno 6') || renderer.includes('adreno 7') || renderer.includes('apple')) {
-                gpuTier = 'high';
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const renderer = (gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string).toLowerCase();
+
+                    // Simple GPU detection - expand as needed
+                    if (renderer.includes('mali') || renderer.includes('adreno 3') || renderer.includes('adreno 4')) {
+                        gpuTier = 'low';
+                    } else if (renderer.includes('adreno 6') || renderer.includes('adreno 7') || renderer.includes('apple')) {
+                        gpuTier = 'high';
+                    }
+                }
             }
+        } catch (error) {
+            console.warn('Failed to detect GPU tier:', error);
         }
     }
 
@@ -70,6 +82,12 @@ export function getDeviceProfile(): DeviceProfile {
  * Get quality settings based on device profile
  */
 export function getQualitySettings(profile: DeviceProfile): QualitySettings {
+    // SSR Safety: Get device pixel ratio safely
+    const getPixelRatio = (max: number = 2) => {
+        if (typeof window === 'undefined') return 1;
+        return Math.min(window.devicePixelRatio || 1, max);
+    };
+
     const settings: Record<DeviceProfile, QualitySettings> = {
         low: {
             textureSize: 512,
@@ -93,7 +111,7 @@ export function getQualitySettings(profile: DeviceProfile): QualitySettings {
             maxRecordingFPS: 30,
             recordingBitrate: 3500000, // 3.5 Mbps
             antialias: true,
-            pixelRatio: Math.min(window.devicePixelRatio, 1.5),
+            pixelRatio: getPixelRatio(1.5),
         },
         high: {
             textureSize: 2048,
@@ -105,7 +123,7 @@ export function getQualitySettings(profile: DeviceProfile): QualitySettings {
             maxRecordingFPS: 60,
             recordingBitrate: 5000000, // 5 Mbps
             antialias: true,
-            pixelRatio: Math.min(window.devicePixelRatio, 2),
+            pixelRatio: getPixelRatio(2),
         },
     };
 
@@ -116,6 +134,7 @@ export function getQualitySettings(profile: DeviceProfile): QualitySettings {
  * Check if running in Flutter WebView
  */
 export function isFlutterWebView(): boolean {
+    if (typeof window === 'undefined') return false;
     return typeof (window as any).DownloadHandler !== 'undefined';
 }
 

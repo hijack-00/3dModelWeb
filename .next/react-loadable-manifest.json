@@ -1,16 +1,24 @@
 {
   "app\\customize\\page.tsx -> @/components/Scene3D": {
-    "id": "app\\customize\\page.tsx -> @/components/Scene3D",
+    "id": 5644,
     "files": [
-      "static/chunks/_app-pages-browser_components_Scene3D_tsx.js"
+      "static/chunks/b536a0f1.0f898456fa240614.js",
+      "static/chunks/386.accbccae0ab9561c.js",
+      "static/chunks/644.b318f5b3b32ca727.js"
+    ]
+  },
+  "components\\Scene3D.tsx -> @/lib/cacheManager": {
+    "id": 3760,
+    "files": [
+      "static/chunks/760.173dc34da08a543e.js"
     ]
   },
   "node_modules\\@react-three\\drei\\core\\VideoTexture.js -> hls.js": {
-    "id": "node_modules\\@react-three\\drei\\core\\VideoTexture.js -> hls.js",
+    "id": null,
     "files": []
   },
   "node_modules\\@react-three\\drei\\web\\FaceLandmarker.js -> @mediapipe/tasks-vision": {
-    "id": "node_modules\\@react-three\\drei\\web\\FaceLandmarker.js -> @mediapipe/tasks-vision",
+    "id": null,
     "files": []
   }
 }

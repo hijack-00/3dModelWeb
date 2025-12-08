@@ -182,14 +182,76 @@ function Model3D(props: {
     });
 
     useEffect(() => {
-        const loader = new GLTFLoader();
-        const draco = new DRACOLoader();
-        draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
-        loader.setDRACOLoader(draco);
+        let cancelled = false;
 
-        loader.load(
-            modelPath,
-            gltf => {
+        const loadModel = async () => {
+            const draco = new DRACOLoader();
+            draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+
+            const loader = new GLTFLoader();
+            loader.setDRACOLoader(draco);
+
+            try {
+                // Try to load from cache first
+                const { cacheManager } = await import('@/lib/cacheManager');
+                const cachedData = await cacheManager.getCachedModel(modelPath);
+
+                let gltf;
+
+                if (cachedData) {
+                    console.log('Loading model from cache:', modelPath);
+                    // Load from cached ArrayBuffer
+                    gltf = await new Promise<any>((resolve, reject) => {
+                        loader.parse(
+                            cachedData,
+                            '',
+                            (result) => resolve(result),
+                            (error) => reject(error)
+                        );
+                    });
+                } else {
+                    console.log('Downloading model:', modelPath);
+                    // Download and cache
+                    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('GET', modelPath, true);
+                        xhr.responseType = 'arraybuffer';
+
+                        xhr.onprogress = (event) => {
+                            if (event.lengthComputable && onProgress) {
+                                const percentComplete = (event.loaded / event.total) * 100;
+                                onProgress(Math.min(percentComplete, 99));
+                            }
+                        };
+
+                        xhr.onload = () => {
+                            if (xhr.status === 200) {
+                                resolve(xhr.response);
+                            } else {
+                                reject(new Error(`Failed to download: ${xhr.status}`));
+                            }
+                        };
+
+                        xhr.onerror = () => reject(new Error('Network error'));
+                        xhr.send();
+                    });
+
+                    // Cache the downloaded model
+                    await cacheManager.cacheModel(modelPath, arrayBuffer);
+
+                    // Parse the ArrayBuffer
+                    gltf = await new Promise<any>((resolve, reject) => {
+                        loader.parse(
+                            arrayBuffer,
+                            '',
+                            (result) => resolve(result),
+                            (error) => reject(error)
+                        );
+                    });
+                }
+
+                if (cancelled) return;
+
                 const object = gltf.scene;
                 // Use API modelConfig if available, otherwise use hardcoded config, otherwise use default
                 const config = modelConfig || MODEL_CONFIG[modelPath] || MODEL_CONFIG.default;
@@ -229,20 +291,18 @@ function Model3D(props: {
                 setModel(object);
                 onProgress && onProgress(100);
                 onModelLoad && onModelLoad();
-            },
-            (xhr) => {
-                // Progress callback
-                if (xhr.lengthComputable && onProgress) {
-                    const percentComplete = (xhr.loaded / xhr.total) * 100;
-                    onProgress(Math.min(percentComplete, 99)); // Keep at 99% until fully loaded
-                }
-            },
-            err => {
+            } catch (err) {
                 console.error('Model load error', err);
+            } finally {
+                draco.dispose();
             }
-        );
+        };
 
-        return () => { draco.dispose() };
+        loadModel();
+
+        return () => {
+            cancelled = true;
+        };
     }, [modelPath]);
 
     // Bake textures whenever stickers or color changes
